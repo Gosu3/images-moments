@@ -99,8 +99,8 @@ export function AdminDashboard() {
       try {
         const direct = config.pipeline === "r2-v2" && await uploadDirect(item.file, item.album, item.id, progress => setQueue(q => q.map(x => x.id === item.id ? { ...x, progress } : x)));
         if (direct) { setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: undefined } : x)); continue; }
-        const prepared = await prepareUpload(item.file, config.images);
-        const form = new FormData(); form.append("file", item.file); form.append("album", item.album);
+        const prepared = await prepareUpload(item.file, config.images, config.pipeline === "legacy");
+        const form = new FormData(); form.append("file", prepared.uploadFile); form.append("album", item.album);
         form.append("width", String(prepared.width)); form.append("height", String(prepared.height));
         if (prepared.preview) form.append("preview", prepared.preview);
         form.append("uploadId", item.id);
@@ -119,12 +119,13 @@ export function AdminDashboard() {
           xhr.ontimeout = () => reject(new Error("Tải ảnh quá lâu. Hãy thử lại."));
           xhr.send(form);
         });
-        setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning } : x));
+        const localWarning = prepared.optimized ? `Ảnh ${item.file.name} đã được tối ưu WebP chất lượng cao để vượt giới hạn upload của Vercel.` : undefined;
+        setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: warning || localWarning } : x));
       } catch (e) { setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "failed", error: (e as Error).message } : x)); }
     }
     };
     // Bound memory, bandwidth and concurrent database writers for large batches.
-    await Promise.all(Array.from({ length: 6 }, worker));
+    await Promise.all(Array.from({ length: 4 }, worker));
     } catch (e) {
       const pending = new Set(work.current.splice(0).map(item => item.id));
       setQueue(q => q.map(item => pending.has(item.id) ? { ...item, status: "failed", error: (e as Error).message } : item));
@@ -195,7 +196,7 @@ export function AdminDashboard() {
           {data.photos.filter(p => p.pipeline === "r2-v2" && p.status !== "ready" && p.status !== "deleted").map(p => <div className="admin-upload-row" key={p.id}><div><strong>{p.filename}</strong><small>{p.status === "processing" ? "Đang xử lý" : p.status === "pending" ? "Chờ upload hoàn tất" : "Xử lý thất bại"}</small></div><button disabled={busy} onClick={() => void retryProcessing(p.id)}>Thử lại xử lý</button><button disabled={busy} onClick={() => setConfirm({ text: `Xóa ảnh chưa hoàn tất “${p.filename}” và dọn file liên quan?`, operation: { action: "deletePhotos", ids: [p.id] } })}>Xóa</button></div>)}
           <button className="dropzone" disabled={!ready || !currentUploadAlbum} onClick={() => fileInput.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}><Plus /><strong>Kéo thả hoặc chọn ảnh</strong></button>
           <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
-          <p className="admin-muted">Không giới hạn số ảnh trong mỗi lần chọn. Hệ thống tự tải song song tối đa 6 ảnh, giữ nguyên chất lượng ảnh gốc; giữ tab này mở đến khi hoàn tất.</p>
+          <p className="admin-muted">Không giới hạn số ảnh trong mỗi lần chọn. Hệ thống tự tối ưu ảnh lớn và tải song song tối đa 4 ảnh để tránh lỗi 413 của Vercel; giữ tab này mở đến khi hoàn tất.</p>
           <div className="admin-toolbar"><h3>Hàng đợi</h3><span role="status">{queue.filter(q => q.status === "done").length}/{queue.length} hoàn tất · {queue.filter(q => q.status === "failed").length} lỗi</span>
             <button onClick={() => { paused.current = !paused.current; setQueuePaused(paused.current); if (!paused.current) void drainQueue(); }}>{queuePaused ? "Tiếp tục tải" : "Tạm dừng sau ảnh đang tải"}</button>
             <button disabled={!queue.some(q => q.status === "failed")} onClick={() => {
