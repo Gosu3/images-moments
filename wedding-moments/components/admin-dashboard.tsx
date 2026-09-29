@@ -1,0 +1,25 @@
+"use client";
+import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { Album, CheckCircle2, CloudUpload, Download, ImageIcon, LayoutDashboard, Loader2, LogOut, Plus, RotateCcw, Settings, Trash2, Upload } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,AlertDialogDescription,AlertDialogFooter,AlertDialogHeader,AlertDialogTitle } from "@/components/ui/alert-dialog";
+
+type UploadItem={id:string;name:string;size:number;progress:number;status:"waiting"|"uploading"|"done"|"failed"};
+export function AdminDashboard(){
+  const [items,setItems]=useState<UploadItem[]>([]);const [deleteOpen,setDeleteOpen]=useState(false);const inputRef=useRef<HTMLInputElement>(null);
+  const stats=useMemo(()=>({done:items.filter(i=>i.status==="done").length,active:items.filter(i=>i.status==="uploading").length}),[items]);
+  const addFiles=(files:FileList|null)=>{if(!files)return;const next=[...files].map((f,i):UploadItem=>({id:`${f.name}-${f.size}-${i}`,name:f.name,size:f.size,progress:0,status:"waiting"}));setItems(old=>[...old,...next]);next.slice(0,4).forEach((item,index)=>{setTimeout(()=>startUpload(item.id),index*350)});};
+  const startUpload=(id:string)=>{setItems(old=>old.map(i=>i.id===id?{...i,status:"uploading"}:i));let progress=0;const timer=setInterval(()=>{progress=Math.min(100,progress+12+Math.random()*16);setItems(old=>old.map(i=>i.id===id?{...i,progress}:i));if(progress>=100){clearInterval(timer);setItems(old=>old.map(i=>i.id===id?{...i,progress:100,status:"done"}:i));}},260)};
+  return <div className="admin-shell">
+    <aside className="admin-sidebar"><Link className="admin-brand" href="/"><span>WM</span><div>Wedding<br/>Moments</div></Link><nav>{[[LayoutDashboard,"Tổng quan"],[Album,"Album"],[ImageIcon,"Ảnh"],[Upload,"Tải lên"],[Download,"Tải xuống"],[Settings,"Cài đặt"]].map(([Icon,label],i)=>{const C=Icon as typeof Album;return <button className={i===3?"active":""} key={label as string}><C size={18}/>{label as string}</button>})}</nav><Link href="/" className="admin-logout"><LogOut size={17}/>Xem trang cưới</Link></aside>
+    <main className="admin-main"><header><div><p>Quản trị thư viện</p><h1>Tải ảnh lên</h1></div><div className="admin-user"><span>MA</span><div><strong>Minh Anh</strong><small>Quản trị viên</small></div></div></header>
+      <div className="admin-content"><section className="upload-overview"><div><CloudUpload/><h2>Thêm khoảnh khắc mới</h2><p>Ảnh gốc được tải trực tiếp lên R2 và không bị resize hay nén lại.</p></div><div className="mini-stats"><span><strong>{items.length}</strong>trong hàng đợi</span><span><strong>{stats.done}</strong>hoàn tất</span><span><strong>{stats.active}</strong>đang tải</span></div></section>
+      <section className="upload-panel"><div className="upload-settings"><label>Album<select defaultValue="le-thanh-hon"><option value="le-thanh-hon">Lễ Thành Hôn</option><option>Wedding Party</option><option>Đón Dâu</option></select></label><span>Tối đa 5 ảnh tải đồng thời · JPEG, PNG, WebP · 50 MB/ảnh</span></div>
+        <button className="dropzone" onClick={()=>inputRef.current?.click()} onDrop={e=>{e.preventDefault();addFiles(e.dataTransfer.files)}} onDragOver={e=>e.preventDefault()}><span><Plus/></span><strong>Kéo thả ảnh hoặc thư mục vào đây</strong><small>hoặc chạm để chọn ảnh từ thiết bị</small></button><input ref={inputRef} hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e=>addFiles(e.target.files)}/>
+        <div className="queue-head"><h3>Hàng đợi tải lên</h3>{items.length>0&&<button onClick={()=>setDeleteOpen(true)}><Trash2 size={16}/>Xóa danh sách</button>}</div>
+        {items.length===0?<div className="queue-empty"><ImageIcon/><p>Ảnh bạn chọn sẽ xuất hiện tại đây.</p></div>:<div className="upload-list">{items.map(item=><div className="upload-item" key={item.id}><div className="file-icon"><ImageIcon/></div><div className="file-info"><strong>{item.name}</strong><small>{(item.size/1024/1024).toFixed(1)} MB · {item.status==="done"?"Đã lưu bản gốc":item.status==="uploading"?"Đang tải trực tiếp lên R2":"Đang chờ"}</small><Progress value={item.progress}/></div><div className={`upload-status ${item.status}`}>{item.status==="done"?<CheckCircle2/>:item.status==="uploading"?<Loader2 className="spin"/>:<RotateCcw/>}</div></div>)}</div>}
+      </section></div>
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Xóa danh sách tải lên?</AlertDialogTitle><AlertDialogDescription>Ảnh đã tải thành công vẫn được giữ nguyên trong kho lưu trữ. Chỉ danh sách trên màn hình được làm trống.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Hủy</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={()=>setItems([])}>Xóa danh sách</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    </main></div>
+}

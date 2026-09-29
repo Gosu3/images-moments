@@ -1,0 +1,2 @@
+import {NextResponse} from "next/server";
+export async function GET(request:Request){const ids=new URL(request.url).searchParams.get("ids")?.split(",").filter(Boolean)??[];if(ids.length===0)return NextResponse.json({error:"Chưa chọn ảnh"},{status:400});return NextResponse.json({jobId:crypto.randomUUID(),status:"queued",message:"Đang chuẩn bị ảnh. Liên kết tải sẽ xuất hiện khi gói ZIP sẵn sàng.",photoCount:ids.length},{status:202})}

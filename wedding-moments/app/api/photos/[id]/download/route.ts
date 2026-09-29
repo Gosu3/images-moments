@@ -1,0 +1,2 @@
+import {NextResponse} from "next/server";import {createR2SignedUrl} from "@/lib/r2-presign";
+export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){const{id}=await params;if(!/^photo-[0-9]+$|^[0-9a-f-]{36}$/i.test(id))return NextResponse.json({error:"Ảnh không hợp lệ"},{status:400});const key=`weddings/demo/albums/ceremony/originals/${id}.jpg`;const url=await createR2SignedUrl({method:"GET",key,expires:300});if(url)return NextResponse.redirect(url);return NextResponse.redirect(new URL("/wedding-hero.webp",process.env.APP_URL??"http://localhost:5173"))}

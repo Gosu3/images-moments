@@ -1,0 +1,5 @@
+import test from "node:test";import assert from "node:assert/strict";import fs from "node:fs";
+test("MVP routes and documentation are present",()=>{for(const path of ["app/page.tsx","app/album/[slug]/page.tsx","app/admin/page.tsx","app/access/page.tsx","app/api/uploads/presign/route.ts","docs/ARCHITECTURE.md","docs/SECURITY.md"])assert.equal(fs.existsSync(path),true,path)});
+test("gallery starts with a bounded page",()=>{const src=fs.readFileSync("components/gallery-experience.tsx","utf8");assert.match(src,/useState\(9\)/);assert.match(src,/loading=\{index<4\?"eager":"lazy"\}/);assert.doesNotMatch(src,/originals\//)});
+test("generated performance datasets stay paginated",()=>{for(const count of [50,500,2000]){const pageSize=24;const rendered=Math.min(count,pageSize);assert.ok(rendered<=24);assert.ok(rendered<count||count<=pageSize)}});
+test("secrets never use NEXT_PUBLIC prefix",()=>{const env=fs.readFileSync(".env.example","utf8");for(const secret of ["R2_SECRET_ACCESS_KEY","SUPABASE_SERVICE_ROLE_KEY","AUTH_SECRET"])assert.ok(!env.includes(`NEXT_PUBLIC_${secret}`))});

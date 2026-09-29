@@ -1,0 +1,2 @@
+import QRCode from "qrcode";
+export async function GET(request:Request){const value=new URL(request.url).searchParams.get("value")??"";if(!value.startsWith("http")||value.length>500)return new Response("Invalid QR value",{status:400});const svg=await QRCode.toString(value,{type:"svg",margin:1,width:512,color:{dark:"#193329",light:"#f6f3ed"},errorCorrectionLevel:"M"});return new Response(svg,{headers:{"content-type":"image/svg+xml; charset=utf-8","cache-control":"public, max-age=3600"}})}
