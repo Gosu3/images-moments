@@ -16,23 +16,22 @@ export default function Home() {
         </nav>
       </header>
 
-      <section className="compact-wedding-intro">
-        <div className="compact-wedding-copy">
+      <section id="our-story" className="wedding-overview">
+        <div className="wedding-overview-main">
           <p className="eyebrow ink">Wedding Moments · 18.10.2026</p>
           <h1>Minh Anh <i>&amp;</i> Hoàng Nam</h1>
-          <p className="compact-note">Những khoảnh khắc thân thương trong ngày chúng mình về chung một nhà.</p>
           <div className="compact-meta">
             <span><CalendarDays size={17}/>Hà Nội, Việt Nam</span>
             <span><Images size={17}/>{photos.length * 28 + 13} khoảnh khắc</span>
             <span><LockKeyhole size={16}/>Thư viện riêng tư</span>
           </div>
         </div>
-        <figure className="compact-cover"><img src="/wedding-hero.webp" alt="Minh Anh và Hoàng Nam trong ánh hoàng hôn" fetchPriority="high"/></figure>
-      </section>
-
-      <section id="our-story" className="story-compact">
-        <p className="eyebrow ink">Our Story · Câu chuyện của chúng mình</p>
-        <div><h2>Từng khoảnh khắc,<br/><em>một phần ký ức.</em></h2><p>Từ buổi chiều dịu nắng đến lời hẹn ước trước gia đình — tất cả được lưu lại như cách chúng mình đã cảm nhận.</p></div>
+        <figure className="overview-cover"><img src="/wedding-hero.webp" alt="Minh Anh và Hoàng Nam trong ánh hoàng hôn" fetchPriority="high"/></figure>
+        <div className="overview-story">
+          <p className="eyebrow ink">Our Story</p>
+          <h2>Một ngày để nhớ,<br/><em>một đời để thương.</em></h2>
+          <p>Từ buổi chiều dịu nắng đến lời hẹn ước trước gia đình — tất cả được lưu lại như cách chúng mình đã cảm nhận.</p>
+        </div>
       </section>
 
       <HomeAlbumTabs />
