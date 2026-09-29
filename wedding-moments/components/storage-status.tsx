@@ -5,6 +5,17 @@ export function StorageStatus() {
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [cleanup, setCleanup] = useState("");
+  async function clean() {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/photos/cleanup", { method: "POST" });
+      const result = await response.json() as { removed: number; pending: number; error?: string };
+      if (!response.ok) throw new Error(result.error || "Không thể dọn ảnh.");
+      setCleanup(`Đã dọn ${result.removed} ảnh; ${result.pending} ảnh chờ hết hạn upload hoặc cần thử lại. Không xóa storage legacy.`);
+    } catch (e) { setCleanup((e as Error).message); }
+    finally { setBusy(false); }
+  }
   async function check() {
     setBusy(true); setError(""); setStatus(null);
     try {
@@ -16,8 +27,10 @@ export function StorageStatus() {
     finally { setBusy(false); }
   }
   return <section className="admin-panel"><h2>Lưu trữ ảnh</h2>
-    <p>Supabase lưu thông tin album. R2 giữ ảnh gốc. Cloudflare Images cung cấp ảnh xem trước.</p>
+    <p>Supabase lưu thông tin album. Luồng ảnh mới dùng R2 giữ ảnh gốc và ảnh xem trước; Cloudflare Images tạo thumbnail.</p>
     <button type="button" disabled={busy} onClick={() => void check()}>{busy ? "Đang kiểm tra…" : "Kiểm tra cấu hình"}</button>
+    <button type="button" disabled={busy} onClick={() => void clean()}>Dọn file của ảnh đã xóa</button>
+    {cleanup && <p role="status">{cleanup}</p>}
     {error && <p role="alert">{error}</p>}
     {status && <div role="status"><p>Dữ liệu: {status.database === "supabase" ? "Supabase" : "D1 hiện tại"} · Ảnh gốc: {status.originals === "s3" ? "R2 riêng" : "R2 hiện tại"} · Cloudflare Images: {status.images ? "Đã bật" : "Chưa bật"}</p>
       <p>{status.missing.length ? `Cần bổ sung: ${status.missing.join(", ")}` : "Đã có các biến cấu hình cần thiết."}</p><p className="admin-muted">Đây là kiểm tra cấu hình, chưa xác nhận quyền truy cập dịch vụ. Tải một ảnh thử và tải lại ảnh gốc để kiểm tra kết nối thực tế.</p></div>}

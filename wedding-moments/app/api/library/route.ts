@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { libraryError, libraryOwner, LibraryError, mutateLibrary, readLibrary } from "@/lib/library-server";
+import { markDeleted } from "@/lib/image-lifecycle";
 const operation = z.discriminatedUnion("action", [
   z.object({ action: z.literal("album"), slug: z.string().min(1).max(100), name: z.string().trim().min(1).max(100), time: z.string().max(100) }),
   z.object({ action: z.literal("deleteAlbum"), slug: z.string() }),
@@ -25,11 +26,12 @@ export async function POST(request: Request) {
         if (existing) Object.assign(existing, { name: op.name, time: op.time });
         else data.albums.push({ slug: op.slug, name: op.name, time: op.time });
       } else if (op.action === "deleteAlbum") {
-        if (data.photos.some(p => p.album === op.slug)) throw new LibraryError("Hãy chuyển hoặc xóa ảnh trước khi xóa album.", 400);
+        if (data.photos.some(p => p.album === op.slug && p.status !== "deleted")) throw new LibraryError("Hãy chuyển hoặc xóa ảnh trước khi xóa album.", 400);
         data.albums = data.albums.filter(a => a.slug !== op.slug);
       } else if (op.action === "deletePhotos") {
-        // Remove metadata only: original objects remain recoverable in storage.
-        data.photos = data.photos.filter(p => !op.ids.includes(p.id));
+        // Preserve a durable cleanup record. Never lose object keys before
+        // physical deletion succeeds. Legacy originals are retained for migration.
+        data.photos.forEach(p => { if (op.ids.includes(p.id) && p.status !== "deleted") markDeleted(p); });
       } else if (op.action === "movePhotos") {
         if (!data.albums.some(a => a.slug === op.album)) throw new LibraryError("Album không tồn tại.", 404);
         data.photos = data.photos.map(p => op.ids.includes(p.id) ? { ...p, album: op.album } : p);

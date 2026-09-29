@@ -48,6 +48,8 @@ assert.equal((await write({ action: 'deleteAlbum', slug: 'test' }, library.revis
 library = await read();
 assert.equal((await write({ action: 'settings', adminName: 'Thọ Nguyễn', title: 'Thư viện kiểm thử' }, library.revision)).status, 200);
 assert.equal((await read()).settings.title, 'Thư viện kiểm thử');
-assert.equal((await request('/api/uploads/presign', { method: 'POST' })).status, 410);
+const ticket = await request('/api/uploads/presign', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+assert.equal(ticket.status, 200);
+assert.equal((await ticket.json()).mode, 'legacy');
 assert.equal((await request('/api/library', { method: 'POST', headers: { origin: 'https://invalid.example', 'content-type': 'application/json' }, body: '{}' })).status, 403);
 console.log('PASS: authentication, origin protection, album CRUD, revisions, upload, exact original bytes, owner isolation, move/delete photos, persistent settings.');

@@ -10,15 +10,18 @@ export function useLibrary() {
       const response = await fetch("/api/library", { cache: "no-store" });
       const result = await response.json() as Library & { error?: string };
       if (!response.ok) throw new Error(result.error);
-      setData(result); setError(""); setReady(true);
+      setData({ ...result, photos: result.photos.filter(p => p.status !== "deleted") }); setError(""); setReady(true);
     } catch (e) { setError((e as Error).message); setReady(false); }
   }, []);
+  // reload synchronizes an external HTTP resource; its state updates occur
+  // after await, not synchronously during the effect.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void reload(); }, [reload]);
   async function mutate(operation: Record<string, unknown>) {
     const response = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...operation, revision: data.revision }) });
     const result = await response.json() as Library & { error?: string };
     if (!response.ok) throw new Error(result.error);
-    setData(result);
+    setData({ ...result, photos: result.photos.filter(p => p.status !== "deleted") });
   }
   return { data, error, ready, reload, mutate };
 }

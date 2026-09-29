@@ -1,12 +1,18 @@
 import { libraryError, libraryOwner, LibraryError, readLibrary } from "@/lib/library-server";
 import { getOriginal } from "@/lib/original-storage";
 import { signedPreviewUrl } from "@/lib/cloudflare-images";
+import { imageDeliveryUrl } from "@/lib/image-service";
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const owner = await libraryOwner(request);
     const { id } = await params;
     const photo = (await readLibrary(owner)).photos.find(p => p.id === id);
-    if (!photo?.key) throw new LibraryError("Không tìm thấy ảnh.", 404);
+    if (!photo?.key || photo.status && photo.status !== "ready") throw new LibraryError("Không tìm thấy ảnh.", 404);
+    if (photo.pipeline === "r2-v2") {
+      const variant = new URL(request.url).searchParams.get("variant");
+      if (!photo.previewKey || variant !== "thumbnail" && variant !== "preview") throw new LibraryError("Chỉ phục vụ preview; dùng Tải về để lấy original.", 400);
+      return new Response(null, { status: 302, headers: { Location: await imageDeliveryUrl(photo.previewKey, variant), "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" } });
+    }
     if (new URL(request.url).searchParams.get("variant") === "thumbnail" && photo.imageId) {
       try {
         return new Response(null, { status: 302, headers: { Location: await signedPreviewUrl(photo.imageId), "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" } });
