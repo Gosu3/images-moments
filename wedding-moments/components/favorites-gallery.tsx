@@ -15,7 +15,7 @@ export function FavoritesGallery() {
     window.addEventListener("wm-favorites-changed", update);
     return () => { window.removeEventListener("storage", update); window.removeEventListener("wm-favorites-changed", update); };
   }, []);
-  if (error) return <p role="alert">{error} <Link href="/admin/login">Đăng nhập</Link></p>;
+  if (error && !ready) return <p role="alert">{error} <Link href="/">Về thư viện</Link></p>;
   if (!ready) return <p>Đang tải ảnh yêu thích…</p>;
   const photos = data.photos.filter(p => ids.has(p.id) && isPhotoReady(p));
   return <><GalleryExperience photos={photos} albumName="Ảnh yêu thích" />{!photos.length && <p className="admin-empty">Chưa có ảnh yêu thích. <Link href="/">Mở thư viện để chọn ảnh</Link></p>}</>;

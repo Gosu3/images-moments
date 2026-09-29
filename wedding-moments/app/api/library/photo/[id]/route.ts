@@ -1,13 +1,12 @@
-import { libraryError, libraryOwner, LibraryError, readLibrary } from "@/lib/library-server";
+import { libraryError, LibraryError, readSharedLibrary } from "@/lib/library-server";
 import { getOriginal } from "@/lib/original-storage";
 import { signedPreviewUrl } from "@/lib/cloudflare-images";
 import { imageDeliveryUrl } from "@/lib/image-service";
 import { getGalleryPreview } from "@/lib/gallery-preview";
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const owner = await libraryOwner(request);
     const { id } = await params;
-    const photo = (await readLibrary(owner)).photos.find(p => p.id === id);
+    const photo = (await readSharedLibrary(request)).photos.find(p => p.id === id);
     if (!photo?.key || photo.status && photo.status !== "ready") throw new LibraryError("Không tìm thấy ảnh.", 404);
     if (photo.pipeline === "r2-v2") {
       const variant = new URL(request.url).searchParams.get("variant");

@@ -26,7 +26,7 @@ type QueueItem = { id: string; file: File; album: string; progress: number; stat
 
 export function AdminDashboard() {
   const router = useRouter();
-  const { data, ready, error, authRequired, reload, mutate } = useLibrary();
+  const { data, ready, error, authRequired, reload, mutate } = useLibrary(true);
   const [section, setSection] = useState<Section>("overview");
   const [albumFilter, setAlbumFilter] = useState("");
   const [query, setQuery] = useState("");
@@ -71,7 +71,7 @@ export function AdminDashboard() {
       const response = await fetch("/api/uploads/finalize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ photoId: id }) });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || "Không thể xử lý ảnh.");
-      setNotice("Đã tạo preview.");
+      setNotice("Ảnh đã sẵn sàng trong thư viện.");
     } catch (e) { setNotice((e as Error).message); }
     finally { await reload(); setBusy(false); }
   }
@@ -222,7 +222,7 @@ export function AdminDashboard() {
             {(item.status === "failed" || item.status === "done" && item.warning) && <button disabled={!ready} onClick={() => { if (work.current.some(q => q.id === item.id)) return; work.current.push(item); setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "waiting", progress: 0 } : x)); void drainQueue(); }}>Thử lại</button>}</div>)}
           {queue.filter(item => item.status !== "done" || item.warning).length > 100 && <p>Hiển thị 100 ảnh đầu trong hàng đợi; các ảnh còn lại vẫn được tải tự động.</p>}
         </section>}
-        {section === "settings" && <><StorageStatus /><form key={data.revision} className="admin-panel admin-form" onSubmit={e => { e.preventDefault(); const form = new FormData(e.currentTarget); void save({ action: "settings", adminName: form.get("adminName"), title: form.get("title") }); }}>
+        {section === "settings" && <><StorageStatus /><form className="admin-panel admin-form" onSubmit={e => { e.preventDefault(); const form = new FormData(e.currentTarget); void save({ action: "settings", adminName: form.get("adminName"), title: form.get("title") }); }}>
           <h2>Thông tin thư viện</h2><label>Tên quản trị viên<input name="adminName" required maxLength={100} defaultValue={data.settings.adminName} /></label><label>Tiêu đề thư viện ảnh<input name="title" required maxLength={150} defaultValue={data.settings.title} /></label>
           <p className="admin-muted">Máy tính tải file qua trình duyệt. Điện thoại hỗ trợ chia sẻ file sẽ mở menu lưu ảnh của hệ thống.</p><button disabled={!ready || busy} type="submit">Lưu cài đặt</button>
         </form></>}

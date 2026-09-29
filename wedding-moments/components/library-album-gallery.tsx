@@ -6,7 +6,7 @@ import { GalleryExperience } from "./gallery-experience";
 
 export function LibraryAlbumGallery({ slug }: { slug: string }) {
   const { data, ready, error, authRequired, reload } = useLibrary();
-  if (error) return <div className="admin-empty" role="alert">{error} {authRequired && <Link href="/admin/login">Đăng nhập</Link>}<button onClick={() => void reload()}>Thử lại</button></div>;
+  if (error && !ready) return <div className="admin-empty" role="alert">{error} {authRequired && <Link href="/">Về trang chủ</Link>}<button onClick={() => void reload()}>Thử lại</button></div>;
   if (!ready) return <p className="admin-empty">Đang tải thư viện…</p>;
   const album = data.albums.find(a => a.slug === slug);
   if (!album) return <p className="admin-empty">Album không tồn tại. <Link href="/">Về trang chủ</Link></p>;

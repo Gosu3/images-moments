@@ -22,7 +22,7 @@ export default function Home() {
           <div className="compact-meta">
             <span><CalendarDays size={17}/>Hà Nội, Việt Nam</span>
             <span><Images size={17}/>Album kỷ niệm</span>
-            <span><LockKeyhole size={16}/>Thư viện riêng tư</span>
+            <span><LockKeyhole size={16}/>Album dành cho khách mời</span>
           </div>
         </div>
         <div className="overview-story">

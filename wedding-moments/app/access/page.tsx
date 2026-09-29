@@ -1,2 +1,2 @@
 import { redirect } from "next/navigation";
-export default function AccessPage() { redirect("/admin/login"); }
+export default function AccessPage() { redirect("/#albums"); }

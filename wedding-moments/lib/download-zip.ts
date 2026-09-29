@@ -1,5 +1,6 @@
 import type { Photo } from "./mock-data";
 import { getOriginalDownloadEndpoint } from "./photo-urls";
+import { fetchOriginal } from "./fetch-original";
 
 export async function downloadZip(photos: Photo[], progress: (done: number, total: number) => void) {
   if (!photos.length || photos.length > 100) throw new Error("Chọn từ 1 đến 100 ảnh mỗi gói ZIP.");
@@ -10,7 +11,7 @@ export async function downloadZip(photos: Photo[], progress: (done: number, tota
     const response = await fetch(getOriginalDownloadEndpoint(photo.id), { method: "POST" });
     const ticket = await response.json() as { url?: string; filename?: string; error?: string };
     if (!response.ok || !ticket.url) throw new Error(ticket.error || "Không thể lấy ảnh gốc.");
-    const original = await fetch(ticket.url);
+    const original = await fetchOriginal(ticket.url, photo.id);
     if (!original.ok || !original.body) throw new Error("Không thể tải ảnh gốc.");
     const reader = original.body.getReader();
     const chunks: Uint8Array[] = [];

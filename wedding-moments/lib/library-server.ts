@@ -13,6 +13,22 @@ export async function libraryOwner(request: Request, write = false) {
   if (!user) throw new LibraryError("Vui lòng đăng nhập để quản lý thư viện.", 401);
   return user.userId;
 }
+// This Vercel deployment hosts one wedding library. Never accept an owner
+// supplied by a visitor; management endpoints still use libraryOwner.
+export async function libraryReader(request: Request) {
+  return process.env.VERCEL ? "vercel-admin" : libraryOwner(request);
+}
+let sharedRead: { expires: number; value: Promise<Library> } | undefined;
+export async function readSharedLibrary(request: Request) {
+  const owner = await libraryReader(request);
+  if (!process.env.VERCEL) return readLibrary(owner);
+  if (!sharedRead || sharedRead.expires <= Date.now()) {
+    const entry = { expires: Date.now() + 2000, value: readLibrary(owner) };
+    sharedRead = entry;
+    void entry.value.catch(() => { if (sharedRead === entry) sharedRead = undefined; });
+  }
+  return sharedRead.value;
+}
 function db() {
   if (!env.DB) throw new LibraryError("Kho dữ liệu chưa sẵn sàng. Vui lòng thử lại sau.");
   return env.DB;
@@ -41,7 +57,7 @@ export async function mutateLibrary(owner: string, update: (library: Library) =>
     if (expected !== undefined && expected !== library.revision) throw new LibraryError("Dữ liệu vừa thay đổi. Hãy tải lại danh sách rồi thử lại.", 409);
     update(library);
     if (provider === "supabase") {
-      if (await saveSupabaseLibrary(owner, library, library.revision)) return { ...library, revision: library.revision + 1 };
+      if (await saveSupabaseLibrary(owner, library, library.revision)) { sharedRead = undefined; return { ...library, revision: library.revision + 1 }; }
       continue;
     }
     const result = await db().prepare("UPDATE libraries SET data = ?, revision = revision + 1 WHERE owner = ? AND revision = ?").bind(JSON.stringify(library), owner, library.revision).run();
