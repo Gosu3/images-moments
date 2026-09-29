@@ -97,7 +97,7 @@ export function AdminDashboard() {
       const item = work.current.shift()!;
       setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "uploading" } : x));
       try {
-        const direct = config.pipeline === "r2-v2" && await uploadDirect(item.file, item.album, item.id, progress => setQueue(q => q.map(x => x.id === item.id ? { ...x, progress } : x)));
+        const direct = config.pipeline !== "legacy" && await uploadDirect(item.file, item.album, item.id, progress => setQueue(q => q.map(x => x.id === item.id ? { ...x, progress } : x)));
         if (direct) { setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: undefined } : x)); continue; }
         const prepared = await prepareUpload(item.file, config.images, config.pipeline === "legacy");
         const form = new FormData(); form.append("file", prepared.uploadFile); form.append("album", item.album);
@@ -193,10 +193,10 @@ export function AdminDashboard() {
         </>}
         {section === "upload" && <section className="admin-panel">
           <h2>Thêm ảnh gốc</h2><div className="admin-toolbar">{albumSelect(currentUploadAlbum, setUploadAlbum)}<span>JPEG, PNG, WebP · Tối đa 50 MB/ảnh</span></div>
-          {data.photos.filter(p => p.pipeline === "r2-v2" && p.status !== "ready" && p.status !== "deleted").map(p => <div className="admin-upload-row" key={p.id}><div><strong>{p.filename}</strong><small>{p.status === "processing" ? "Đang xử lý" : p.status === "pending" ? "Chờ upload hoàn tất" : "Xử lý thất bại"}</small></div><button disabled={busy} onClick={() => void retryProcessing(p.id)}>Thử lại xử lý</button><button disabled={busy} onClick={() => setConfirm({ text: `Xóa ảnh chưa hoàn tất “${p.filename}” và dọn file liên quan?`, operation: { action: "deletePhotos", ids: [p.id] } })}>Xóa</button></div>)}
+          {data.photos.filter(p => (p.pipeline === "r2-v2" || p.pipeline === "r2-direct") && p.status !== "ready" && p.status !== "deleted").map(p => <div className="admin-upload-row" key={p.id}><div><strong>{p.filename}</strong><small>{p.status === "processing" ? "Đang tạo thumbnail và preview" : p.status === "pending" ? "Chờ upload R2 hoàn tất" : "Xử lý thất bại"}</small></div><button disabled={busy} onClick={() => void retryProcessing(p.id)}>Thử lại xử lý</button><button disabled={busy} onClick={() => setConfirm({ text: `Xóa ảnh chưa hoàn tất “${p.filename}” và dọn file liên quan?`, operation: { action: "deletePhotos", ids: [p.id] } })}>Xóa</button></div>)}
           <button className="dropzone" disabled={!ready || !currentUploadAlbum} onClick={() => fileInput.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}><Plus /><strong>Kéo thả hoặc chọn ảnh</strong></button>
           <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
-          <p className="admin-muted">Không giới hạn số ảnh trong mỗi lần chọn. Hệ thống tự tối ưu ảnh lớn và tải song song tối đa 4 ảnh để tránh lỗi 413 của Vercel; giữ tab này mở đến khi hoàn tất.</p>
+          <p className="admin-muted">Không giới hạn số ảnh trong mỗi lần chọn. File gốc được tải thẳng lên R2, không nén và không đi qua Vercel; hệ thống tải song song tối đa 4 ảnh.</p>
           <div className="admin-toolbar"><h3>Hàng đợi</h3><span role="status">{queue.filter(q => q.status === "done").length}/{queue.length} hoàn tất · {queue.filter(q => q.status === "failed").length} lỗi</span>
             <button onClick={() => { paused.current = !paused.current; setQueuePaused(paused.current); if (!paused.current) void drainQueue(); }}>{queuePaused ? "Tiếp tục tải" : "Tạm dừng sau ảnh đang tải"}</button>
             <button disabled={!queue.some(q => q.status === "failed")} onClick={() => {

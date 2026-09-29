@@ -4,7 +4,7 @@ export type LibraryPhoto = Photo & {
   filename: string; demo?: boolean; key?: string; storage?: "binding" | "s3";
   size?: number; sha256?: string; contentType?: string; imageId?: string;
   previewStatus?: "ready" | "failed" | "disabled"; uploadId?: string;
-  pipeline?: "r2-v2"; previewKey?: string; previewWidth?: number; previewHeight?: number;
+  pipeline?: "r2-v2" | "r2-direct"; previewKey?: string; previewWidth?: number; previewHeight?: number;
   status?: "pending" | "processing" | "ready" | "failed" | "deleted";
   stagingKey?: string; uploadExpiresAt?: string; createdAt?: string; updatedAt?: string;
   processingToken?: string; processingUntil?: string; deletedAt?: string; cleanupAfter?: string;

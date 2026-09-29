@@ -14,4 +14,5 @@ export function originalProvider(): "binding" | "s3" {
   if (provider !== "binding" && provider !== "s3") throw new Error("Invalid ORIGINAL_STORAGE");
   return provider;
 }
+export function directR2Enabled() { return originalProvider() === "s3"; }
 export function imagesEnabled() { return setting("CF_IMAGES_ENABLED") === "true"; }

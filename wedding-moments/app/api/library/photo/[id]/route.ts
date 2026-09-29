@@ -20,7 +20,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       } catch { /* Keep the original available if preview configuration is missing. */ }
     }
     const variant = new URL(request.url).searchParams.get("variant");
-    if (process.env.VERCEL && (variant === "thumbnail" || variant === "preview")) {
+    if ((process.env.VERCEL || photo.pipeline === "r2-direct") && (variant === "thumbnail" || variant === "preview")) {
       const preview = await getGalleryPreview(photo, variant);
       return new Response(preview.body, { headers: { "Content-Type": "image/webp", "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" } });
     }

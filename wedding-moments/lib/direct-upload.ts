@@ -7,7 +7,9 @@ async function post(url: string, data: unknown) {
 }
 export async function uploadDirect(file: File, album: string, uploadId: string, progress: (value: number) => void) {
   const sha256 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(b => b.toString(16).padStart(2, "0")).join("");
-  const input = { album, filename: file.name, contentType: file.type, size: file.size, sha256, uploadId };
+  const bitmap = await createImageBitmap(file);
+  const width = bitmap.width, height = bitmap.height; bitmap.close();
+  const input = { album, filename: file.name, contentType: file.type, size: file.size, sha256, uploadId, width, height };
   let ticket = await post("/api/uploads/presign", input);
   if (ticket.mode === "legacy") return false;
   if (ticket.ready) return true;

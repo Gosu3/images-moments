@@ -16,7 +16,7 @@ test('gallery variants are bounded WebP images while source bytes remain unchang
   const source = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: '#123456' } }).jpeg().toBuffer();
   const saved = Buffer.from(source);
   const { resizeGalleryImage } = load({});
-  for (const [variant, bound] of [['thumbnail', 640], ['preview', 1920]]) {
+  for (const [variant, bound] of [['thumbnail', 640], ['preview', 2400]]) {
     const output = await resizeGalleryImage(source, variant);
     const metadata = await sharp(output).metadata();
     assert.equal(metadata.format, 'webp'); assert.equal(metadata.width, bound);
@@ -48,4 +48,20 @@ test('storage authorization failure is not treated as a missing thumbnail', asyn
   const { getGalleryPreview } = load({ getOriginal: async () => { throw new LibraryError('denied', 403); }, putOriginal: async () => { writes++; } });
   await assert.rejects(getGalleryPreview({ key: 'x' }, 'thumbnail'), /denied/);
   assert.equal(writes, 0);
+});
+test('eager thumbnail and preview generation reads the original only once', async () => {
+  const source = await sharp({ create: { width: 2600, height: 1800, channels: 3, background: '#345678' } }).jpeg().toBuffer();
+  const objects = new Map([['owner/original', source]]); let sourceReads = 0;
+  const { prepareGalleryPreviews } = load({
+    getOriginal: async photo => {
+      if (!objects.has(photo.key)) throw new LibraryError('missing', 404);
+      if (photo.key === 'owner/original') sourceReads++;
+      return new Response(objects.get(photo.key));
+    },
+    putOriginal: async (key, file) => objects.set(key, new Uint8Array(await file.arrayBuffer())),
+  });
+  await prepareGalleryPreviews({ key: 'owner/original', storage: 's3' });
+  assert.equal(sourceReads, 1);
+  assert.ok(objects.has('owner/original.wm-thumbnail-v2.webp'));
+  assert.ok(objects.has('owner/original.wm-preview-v2.webp'));
 });

@@ -4,12 +4,17 @@ import { imagePipelineEnabled, imageServiceCall, originalsBucket, type Processed
 import { createR2SignedUrl } from "./r2-presign";
 import { UPLOAD_TTL } from "./image-protocol";
 import type { LibraryPhoto } from "./library-model";
+import { directR2Enabled } from "./cloud-config";
+import { getOriginal, headOriginal, removeUncommittedOriginal } from "./original-storage";
+import { galleryVariantKey, prepareGalleryPreviews } from "./gallery-preview";
+import { validImageHeader } from "./image-upload";
 
 export const uploadRequest = z.object({ album: z.string().min(1).max(100), filename: z.string().min(1).max(255),
   contentType: z.enum(["image/jpeg", "image/png", "image/webp"]), size: z.number().int().positive().max(50 * 1024 * 1024),
-  sha256: z.string().regex(/^[a-f0-9]{64}$/), uploadId: z.string().uuid() });
+  sha256: z.string().regex(/^[a-f0-9]{64}$/), uploadId: z.string().uuid(),
+  width: z.number().int().positive().max(100000), height: z.number().int().positive().max(100000) });
 export async function beginUpload(owner: string, body: unknown) {
-  if (!imagePipelineEnabled()) return { mode: "legacy" as const };
+  if (!imagePipelineEnabled() && !directR2Enabled()) return { mode: "legacy" as const };
   const parsed = uploadRequest.safeParse(body);
   if (!parsed.success) throw new LibraryError("Thông tin ảnh không hợp lệ.", 400);
   const input = parsed.data;
@@ -24,9 +29,12 @@ export async function beginUpload(owner: string, body: unknown) {
       if (photo.status === "deleted") throw new LibraryError("Ảnh đã bị xóa.", 410);
       if (Date.parse(photo.processingUntil || "") > Date.now()) throw new LibraryError("Ảnh đang được xử lý. Hãy thử lại sau.", 409);
     } else {
+      const workerPipeline = imagePipelineEnabled();
       photo = { id, album: input.album, filename: input.filename, alt: input.filename, src: "", preview: "", takenAt: now,
-        width: 0, height: 0, key: `albums/${namespace}/${id}.${ext}`, previewKey: `albums/${namespace}/${id}.jpg`, stagingKey: `uploads/${namespace}/${id}.${ext}`,
-        pipeline: "r2-v2", storage: "s3", status: "pending", size: input.size, sha256: input.sha256, contentType: input.contentType,
+        width: input.width, height: input.height, key: `albums/${namespace}/${id}.${ext}`,
+        previewKey: workerPipeline ? `albums/${namespace}/${id}.jpg` : undefined,
+        stagingKey: workerPipeline ? `uploads/${namespace}/${id}.${ext}` : undefined,
+        pipeline: workerPipeline ? "r2-v2" : "r2-direct", storage: "s3", status: "pending", size: input.size, sha256: input.sha256, contentType: input.contentType,
         uploadId: input.uploadId, createdAt: now, updatedAt: now };
       data.photos.push(photo);
     }
@@ -36,7 +44,8 @@ export async function beginUpload(owner: string, body: unknown) {
   });
   const photo = library.photos.find(p => p.uploadId === input.uploadId)!;
   if (photo.status === "ready") return { mode: "direct" as const, photoId: photo.id, ready: true };
-  const uploadUrl = await createR2SignedUrl({ method: "PUT", key: photo.stagingKey!, contentType: photo.contentType, expires: UPLOAD_TTL, bucketName: originalsBucket() });
+  const uploadUrl = await createR2SignedUrl({ method: "PUT", key: photo.pipeline === "r2-v2" ? photo.stagingKey! : photo.key!, contentType: photo.contentType,
+    expires: UPLOAD_TTL, bucketName: photo.pipeline === "r2-v2" ? originalsBucket() : undefined });
   if (!uploadUrl) throw new LibraryError("Chưa cấu hình R2 upload.");
   return { mode: "direct" as const, photoId: photo.id, uploadUrl, headers: { "Content-Type": photo.contentType! }, expiresIn: UPLOAD_TTL };
 }
@@ -44,7 +53,7 @@ export async function beginUpload(owner: string, body: unknown) {
 export async function finalizeUpload(owner: string, id: string) {
   const token = crypto.randomUUID();
   const library = await mutateLibrary(owner, data => {
-    const photo = data.photos.find(p => p.id === id && p.pipeline === "r2-v2");
+    const photo = data.photos.find(p => p.id === id && (p.pipeline === "r2-v2" || p.pipeline === "r2-direct"));
     if (!photo || photo.status === "deleted") throw new LibraryError("Không tìm thấy ảnh.", 404);
     if (photo.status === "ready") return;
     if (Date.parse(photo.processingUntil || "") > Date.now()) throw new LibraryError("Ảnh đang được xử lý.", 409);
@@ -54,8 +63,21 @@ export async function finalizeUpload(owner: string, id: string) {
   const photo = library.photos.find(p => p.id === id)!;
   if (photo.status === "ready") return photo;
   try {
-    const result = await imageServiceCall<ProcessedImage>("process", { key: photo.key, previewKey: photo.previewKey, stagingKey: photo.stagingKey,
-      size: photo.size, sha256: photo.sha256, contentType: photo.contentType });
+    let result: Partial<ProcessedImage> = {};
+    if (photo.pipeline === "r2-v2") {
+      result = await imageServiceCall<ProcessedImage>("process", { key: photo.key, previewKey: photo.previewKey, stagingKey: photo.stagingKey,
+        size: photo.size, sha256: photo.sha256, contentType: photo.contentType });
+    } else {
+      const object = await headOriginal(photo);
+      if (!Number.isFinite(object.size) || object.size !== photo.size || object.contentType !== photo.contentType) {
+        throw new LibraryError("File trên R2 không khớp dung lượng hoặc định dạng đã chọn.", 422);
+      }
+      const bytes = new Uint8Array(await (await getOriginal(photo)).arrayBuffer());
+      if (!validImageHeader(bytes.subarray(0, 32), photo.contentType!)) throw new LibraryError("Nội dung file trên R2 không khớp định dạng ảnh.", 422);
+      const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(byte => byte.toString(16).padStart(2, "0")).join("");
+      if (digest !== photo.sha256) throw new LibraryError("Checksum ảnh trên R2 không khớp file đã chọn.", 422);
+      await prepareGalleryPreviews(photo, bytes);
+    }
     const saved = await mutateLibrary(owner, data => {
       const target = data.photos.find(p => p.id === id);
       if (!target || target.status === "deleted" || target.processingToken !== token) throw new LibraryError("Trạng thái ảnh đã thay đổi.", 409);
@@ -75,20 +97,25 @@ export async function finalizeUpload(owner: string, id: string) {
 
 export async function cleanupPhotos(owner: string) {
   const library = await readLibrary(owner);
-  const jobs = library.photos.filter(p => (p.pipeline === "r2-v2" || p.migrationTarget) && !p.cleanupComplete && p.status === "deleted" && Date.parse(p.cleanupAfter || "") <= Date.now()).slice(0, 20);
+  const jobs = library.photos.filter(p => (p.pipeline === "r2-v2" || p.pipeline === "r2-direct" || p.migrationTarget) && !p.cleanupComplete && p.status === "deleted" && Date.parse(p.cleanupAfter || "") <= Date.now()).slice(0, 20);
   let removed = 0;
   for (const photo of jobs) {
     try {
-      await imageServiceCall("delete", photo.pipeline === "r2-v2" ? { key: photo.key, previewKey: photo.previewKey, stagingKey: photo.stagingKey } : photo.migrationTarget);
+      if (photo.pipeline === "r2-direct") {
+        await Promise.all([photo.key!, galleryVariantKey(photo, "thumbnail"), galleryVariantKey(photo, "preview")]
+          .map(key => removeUncommittedOriginal(key, "s3").catch(error => { if (!String(error).includes("404")) throw error; })));
+      } else {
+        await imageServiceCall("delete", photo.pipeline === "r2-v2" ? { key: photo.key, previewKey: photo.previewKey, stagingKey: photo.stagingKey } : photo.migrationTarget);
+      }
       await mutateLibrary(owner, data => {
         const target = data.photos.find(p => p.id === photo.id && p.status === "deleted");
-        if (target && (target.legacySource || target.pipeline !== "r2-v2")) target.cleanupComplete = true;
+        if (target && (target.legacySource || target.pipeline !== "r2-v2" && target.pipeline !== "r2-direct")) target.cleanupComplete = true;
         else data.photos = data.photos.filter(p => p.id !== photo.id || p.status !== "deleted");
       });
       removed++;
     } catch { /* Retain durable tombstone and retry on the next cleanup run. */ }
   }
-  return { removed, pending: (await readLibrary(owner)).photos.filter(p => p.status === "deleted" && !p.cleanupComplete && (p.pipeline === "r2-v2" || p.migrationTarget)).length };
+  return { removed, pending: (await readLibrary(owner)).photos.filter(p => p.status === "deleted" && !p.cleanupComplete && (p.pipeline === "r2-v2" || p.pipeline === "r2-direct" || p.migrationTarget)).length };
 }
 export function markDeleted(photo: LibraryPhoto) {
   photo.status = "deleted"; photo.deletedAt = new Date().toISOString();
