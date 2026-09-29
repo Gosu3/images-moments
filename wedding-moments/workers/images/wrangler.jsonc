@@ -1,0 +1,11 @@
+{
+  "name": "wedding-image-pipeline",
+  "main": "index.ts",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "r2_buckets": [
+    { "binding": "ORIGINALS", "bucket_name": "wedding-originals" },
+    { "binding": "PREVIEWS", "bucket_name": "wedding-previews" }
+  ],
+  "images": { "binding": "IMAGES" }
+}

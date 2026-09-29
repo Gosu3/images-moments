@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Minus, Plus, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { Photo } from "@/lib/mock-data";
+import { getPhotoPreviewUrl } from "@/lib/photo-urls";
 
 export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index: number | null; onIndex: (index: number | null) => void }) {
   const [scale, setScale] = useState(1);
@@ -112,7 +113,7 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
         }}
         onPointerCancel={e => { pointers.current.delete(e.pointerId); swipe.current = null; }}
         onLostPointerCapture={e => { pointers.current.delete(e.pointerId); swipe.current = null; }}>
-        {photo && <img key={photo.id} src={photo.src} alt={photo.alt} draggable={false} onLoad={() => apply({ ...transform.current })} style={{ transition: "none", transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }} />}
+        {photo && <img key={photo.id} src={getPhotoPreviewUrl(photo)} alt={photo.alt} draggable={false} onLoad={() => apply({ ...transform.current })} style={{ transition: "none", transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }} />}
       </div>
       {photos.length > 1 && <><button className="viewer-prev" aria-label="Ảnh trước" onClick={() => move(-1)}><ChevronLeft /></button><button className="viewer-next" aria-label="Ảnh tiếp theo" onClick={() => move(1)}><ChevronRight /></button></>}
     </DialogContent>

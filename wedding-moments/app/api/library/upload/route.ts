@@ -4,10 +4,12 @@ import { uploadPreview } from "@/lib/cloudflare-images";
 import { imagesEnabled } from "@/lib/cloud-config";
 import { MAX_ORIGINAL_SIZE, validImageHeader } from "@/lib/image-upload";
 import type { LibraryPhoto } from "@/lib/library-model";
+import { imagePipelineEnabled } from "@/lib/image-service";
 
 export async function POST(request: Request) {
   try {
     const owner = await libraryOwner(request, true);
+    if (imagePipelineEnabled()) throw new LibraryError("Hãy dùng upload trực tiếp R2.", 410);
     if (Number(request.headers.get("content-length")) > 61 * 1024 * 1024) throw new LibraryError("Ảnh vượt quá giới hạn tải lên.", 413);
     const form = await request.formData();
     const file = form.get("file"), preview = form.get("preview");

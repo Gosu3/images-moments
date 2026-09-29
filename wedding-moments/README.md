@@ -1,5 +1,7 @@
 # Wedding Moments
 
+> Cấu hình subsystem ảnh mới và giới hạn kiểm thử: [Image pipeline R2 v2](docs/IMAGE-PIPELINE-VI.md). Mặc định `IMAGE_PIPELINE=legacy`; chỉ bật `r2-v2` sau khi cấu hình và kiểm thử dịch vụ thật. Các ảnh cũ giữ luồng cũ cho tới khi migration được xác minh.
+
 Digital wedding gallery tối ưu cho việc lưu giữ, xem, chọn, chia sẻ và tải ảnh cưới. Ảnh gốc đi thẳng từ trình duyệt tới Cloudflare R2; giao diện chỉ nhận thumbnail/preview từ CDN.
 
 ## Stack

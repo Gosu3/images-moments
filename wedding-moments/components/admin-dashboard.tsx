@@ -5,10 +5,12 @@ import { Album, Download, ImageIcon, LayoutDashboard, LogOut, Plus, Settings, Up
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { useLibrary } from "@/lib/use-library";
-import { savePhotoToDevice } from "@/lib/save-photo";
 import type { LibraryAlbum, LibraryPhoto } from "@/lib/library-model";
 import { prepareUpload } from "@/lib/image-upload";
 import { StorageStatus } from "@/components/storage-status";
+import { uploadDirect } from "@/lib/direct-upload";
+import { getPhotoThumbnailUrl, isPhotoReady } from "@/lib/photo-urls";
+import { downloadOriginal } from "@/lib/save-photo";
 
 const sections = [
   { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
@@ -39,10 +41,20 @@ export function AdminDashboard() {
   const fileInput = useRef<HTMLInputElement>(null);
   const uploading = useRef(false);
   const work = useRef<QueueItem[]>([]);
-  const filtered = data.photos.filter(p => (!albumFilter || p.album === albumFilter) && (p.filename + p.alt).toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi")));
+  const filtered = data.photos.filter(p => isPhotoReady(p) && (!albumFilter || p.album === albumFilter) && (p.filename + p.alt).toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi")));
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 48) - 1));
   const shown = filtered.slice(currentPage * 48, currentPage * 48 + 48);
   const currentUploadAlbum = data.albums.some(a => a.slug === uploadAlbum) ? uploadAlbum : data.albums[0]?.slug ?? "";
+  async function retryProcessing(id: string) {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/uploads/finalize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ photoId: id }) });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Không thể xử lý ảnh.");
+      setNotice("Đã tạo preview.");
+    } catch (e) { setNotice((e as Error).message); }
+    finally { await reload(); setBusy(false); }
+  }
   async function save(operation: Record<string, unknown>) {
     setBusy(true); setNotice("");
     try { await mutate(operation); setNotice("Đã lưu thay đổi."); setEditor(null); setSelected([]); }
@@ -51,7 +63,7 @@ export function AdminDashboard() {
   }
   async function download(photo: LibraryPhoto) {
     try {
-      const result = await savePhotoToDevice(photo.src, photo.filename);
+      const result = await downloadOriginal(photo);
       setHistory(h => [{ name: photo.filename, status: result === "shared" ? "Đã mở menu lưu ảnh" : "Đã gửi tới trình duyệt để tải" }, ...h]);
     } catch (e) {
       if ((e as Error).name !== "AbortError") { setNotice("Không thể tải " + photo.filename); setHistory(h => [{ name: photo.filename, status: "Tải thất bại" }, ...h]); }
@@ -64,6 +76,8 @@ export function AdminDashboard() {
       const item = work.current.shift()!;
       setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "uploading" } : x));
       try {
+        const direct = await uploadDirect(item.file, item.album, item.id, progress => setQueue(q => q.map(x => x.id === item.id ? { ...x, progress } : x)));
+        if (direct) { setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: undefined } : x)); continue; }
         const prepared = await prepareUpload(item.file);
         const form = new FormData(); form.append("file", item.file); form.append("album", item.album);
         form.append("width", String(prepared.width)); form.append("height", String(prepared.height));
@@ -118,7 +132,7 @@ export function AdminDashboard() {
             <div className="admin-toolbar"><button disabled={busy}>Lưu album</button><button type="button" onClick={() => setEditor(null)}>Hủy</button></div>
           </form>}
           <div className="admin-album-grid">{data.albums.map(a => { const pictures = data.photos.filter(p => p.album === a.slug); return <article className="admin-panel" key={a.slug}>
-            {pictures[0] ? <img src={pictures[0].preview} alt={a.name} /> : <div className="admin-empty">Chưa có ảnh</div>}
+            {pictures.find(isPhotoReady) ? <img src={getPhotoThumbnailUrl(pictures.find(isPhotoReady)!)} alt={a.name} /> : <div className="admin-empty">Chưa có ảnh</div>}
             <h3>{a.name}</h3><p>{a.time} · {pictures.length} ảnh</p><div className="admin-toolbar">
               <button onClick={() => { setAlbumFilter(a.slug); setSection("photos"); setPage(0); }}>Xem ảnh</button>
               <button disabled={!ready || busy} onClick={() => setEditor({ ...a })}>Sửa</button>
@@ -130,10 +144,10 @@ export function AdminDashboard() {
           {section === "photos" && <div className="admin-toolbar">
             <button onClick={() => setSelected(shown.every(p => selected.includes(p.id)) ? selected.filter(id => !shown.some(p => p.id === id)) : Array.from(new Set([...selected, ...shown.map(p => p.id)])))}>Chọn / bỏ chọn trang này</button><span>{selected.length} đã chọn</span>
             <select aria-label="Chuyển ảnh đến album" value="" disabled={!ready || busy || !selected.length} onChange={e => { if (e.target.value) void save({ action: "movePhotos", ids: selected, album: e.target.value }); }}><option value="">Chuyển đến album…</option>{data.albums.map(a => <option key={a.slug} value={a.slug}>{a.name}</option>)}</select>
-            <button disabled={!ready || busy || !selected.length} onClick={() => setConfirm({ text: `Xóa ${selected.length} ảnh khỏi thư viện? File gốc trong kho lưu trữ được giữ lại để có thể khôi phục.`, operation: { action: "deletePhotos", ids: selected } })}>Xóa ảnh đã chọn</button>
+            <button disabled={!ready || busy || !selected.length} onClick={() => setConfirm({ text: `Xóa ${selected.length} ảnh khỏi thư viện? Ảnh dùng hệ thống mới sẽ được dọn cả original và preview sau thời gian an toàn; ảnh legacy được giữ chờ migration.`, operation: { action: "deletePhotos", ids: selected } })}>Xóa ảnh đã chọn</button>
           </div>}
           <div className="admin-photo-grid">{shown.map((p, i) => <article key={p.id}>
-            <button className="admin-photo-preview" aria-label={`Phóng to ${p.alt}`} onClick={() => setViewer(currentPage * 48 + i)}><img src={p.preview} alt={p.alt} loading="lazy" /></button>
+            <button className="admin-photo-preview" aria-label={`Phóng to ${p.alt}`} onClick={() => setViewer(currentPage * 48 + i)}><img src={getPhotoThumbnailUrl(p)} alt={p.alt} loading="lazy" /></button>
             <div>{section === "photos" && <input type="checkbox" aria-label={`Chọn ${p.alt}`} checked={selected.includes(p.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, p.id] : ids.filter(id => id !== p.id))} />}<span title={p.filename}>{p.filename}</span><button aria-label={`Tải ${p.filename}`} onClick={() => void download(p)}><Download size={17} /></button></div>
           </article>)}</div>
           {!filtered.length && <p className="admin-empty">Không có ảnh phù hợp.</p>}
@@ -143,6 +157,7 @@ export function AdminDashboard() {
         </>}
         {section === "upload" && <section className="admin-panel">
           <h2>Thêm ảnh gốc</h2><div className="admin-toolbar">{albumSelect(currentUploadAlbum, setUploadAlbum)}<span>JPEG, PNG, WebP · Tối đa 50 MB/ảnh</span></div>
+          {data.photos.filter(p => p.pipeline === "r2-v2" && p.status !== "ready" && p.status !== "deleted").map(p => <div className="admin-upload-row" key={p.id}><div><strong>{p.filename}</strong><small>{p.status === "processing" ? "Đang xử lý" : p.status === "pending" ? "Chờ upload hoàn tất" : "Xử lý thất bại"}</small></div><button disabled={busy} onClick={() => void retryProcessing(p.id)}>Thử lại xử lý</button><button disabled={busy} onClick={() => setConfirm({ text: `Xóa ảnh chưa hoàn tất “${p.filename}” và dọn file liên quan?`, operation: { action: "deletePhotos", ids: [p.id] } })}>Xóa</button></div>)}
           <button className="dropzone" disabled={!ready || !currentUploadAlbum} onClick={() => fileInput.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}><Plus /><strong>Kéo thả hoặc chọn ảnh</strong></button>
           <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
           <div className="admin-toolbar"><h3>Hàng đợi</h3><button disabled={queue.some(q => q.status === "waiting" || q.status === "uploading")} onClick={() => setQueue([])}>Dọn danh sách</button></div>

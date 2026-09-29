@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, Expand, Heart, ImageDown, Play, QrCode, Share2, X } from "lucide-react";
 import type { Photo } from "@/lib/mock-data";
-import { savePhotoToDevice } from "@/lib/save-photo";
+import { downloadOriginal } from "@/lib/save-photo";
+import { getPhotoThumbnailUrl, getPhotoPreviewUrl } from "@/lib/photo-urls";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 export function GalleryExperience({ photos, albumName }: { photos: Photo[]; albumName: string }) {
@@ -33,7 +34,7 @@ export function GalleryExperience({ photos, albumName }: { photos: Photo[]; albu
     if(navigator.share) await navigator.share({title:albumName,text:"Cùng xem khoảnh khắc này nhé",url});
     else { await navigator.clipboard.writeText(url); alert("Đã sao chép liên kết"); }
   };
-  const downloadPhoto=async(photo:Photo)=>{try{const result=await savePhotoToDevice(`/api/photos/${photo.id}/download`,`wedding-moment-${photo.id}.jpg`);setDownloadNotice(result==="shared"?"Đã mở menu lưu ảnh của điện thoại.":"Ảnh đã được tải về.")}catch(error){if((error as Error).name!=="AbortError")setDownloadNotice("Chưa thể tải ảnh. Vui lòng thử lại.")}};
+  const downloadPhoto=async(photo:Photo)=>{try{const result=await downloadOriginal(photo);setDownloadNotice(result==="shared"?"Đã mở menu lưu ảnh của điện thoại.":"Ảnh đã được tải về.")}catch(error){if((error as Error).name!=="AbortError")setDownloadNotice("Chưa thể tải ảnh. Vui lòng thử lại.")}};
 
   return <>
     <header className="gallery-header">
@@ -50,7 +51,7 @@ export function GalleryExperience({ photos, albumName }: { photos: Photo[]; albu
     </section>
     <section className="photo-grid" aria-label={`Ảnh trong ${albumName}`}>
       {photos.slice(0,visible).map((photo,index)=><div key={photo.id} className="photo-card" style={{aspectRatio:`${photo.width}/${photo.height}`}}>
-        <button className="photo-open" onClick={()=>selectMode?toggleSelected(photo.id):setActive(index)} aria-label={`${selectMode?"Chọn":"Mở"} ${photo.alt}`}><img src={photo.preview} alt={photo.alt} loading={index<4?"eager":"lazy"} decoding="async" /></button>
+        <button className="photo-open" onClick={()=>selectMode?toggleSelected(photo.id):setActive(index)} aria-label={`${selectMode?"Chọn":"Mở"} ${photo.alt}`}><img src={getPhotoThumbnailUrl(photo)} alt={photo.alt} loading={index<4?"eager":"lazy"} decoding="async" /></button>
         {selectMode&&<span className={selected.has(photo.id)?"select-dot selected":"select-dot"}>{selected.has(photo.id)&&<Check size={16}/>}</span>}
         {!selectMode&&<span className="photo-time">{photo.takenAt}</span>}
         {!selectMode&&<button className="photo-download" onClick={()=>downloadPhoto(photo)}><Download size={16}/><span>Tải về</span></button>}
@@ -66,7 +67,7 @@ export function GalleryExperience({ photos, albumName }: { photos: Photo[]; albu
         {current&&<>
           <div className="lightbox-top"><span>{active!+1} / {photos.length}</span><div><button onClick={()=>toggleFavorite(current.id)} aria-label="Yêu thích"><Heart fill={favorites.has(current.id)?"currentColor":"none"}/></button><button onClick={share} aria-label="Chia sẻ"><Share2/></button><button onClick={()=>downloadPhoto(current)} aria-label="Tải ảnh về thiết bị"><Download/></button><button onClick={()=>document.documentElement.requestFullscreen?.()} aria-label="Toàn màn hình"><Expand/></button><button onClick={()=>setActive(null)} aria-label="Đóng"><X/></button></div></div>
           <button className="lightbox-arrow left" onClick={()=>move(-1)} aria-label="Ảnh trước"><ChevronLeft/></button>
-          <div className="lightbox-stage"><img key={current.id} src={current.src} alt={current.alt}/></div>
+          <div className="lightbox-stage"><img key={current.id} src={getPhotoPreviewUrl(current)} alt={current.alt}/></div>
           <button className="lightbox-arrow right" onClick={()=>move(1)} aria-label="Ảnh sau"><ChevronRight/></button>
           <p className="lightbox-caption">{current.takenAt} · Lễ Thành Hôn</p>
         </>}
