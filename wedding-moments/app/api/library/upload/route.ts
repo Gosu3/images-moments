@@ -28,7 +28,8 @@ export async function POST(request: Request) {
     if (photo && photo.sha256 !== sha256) throw new LibraryError("Mã tải lên đã dùng cho ảnh khác.", 409);
     if (!photo) {
       const id = crypto.randomUUID();
-      const key = `${encodeURIComponent(owner)}/${id}`;
+      // Stable object key makes a retried request reuse the original bytes.
+      const key = `${encodeURIComponent(owner)}/${uploadId}-${sha256}`;
       const storage = await putOriginal(key, file, sha256);
       const src = `/api/library/photo/${id}`;
       const record: LibraryPhoto = { id, src, preview: src + "?variant=thumbnail", album, filename: file.name, alt: file.name, width, height,

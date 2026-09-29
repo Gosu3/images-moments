@@ -22,14 +22,21 @@ export function bucket() {
   return env.BUCKET;
 }
 export async function readLibrary(owner: string): Promise<Library> {
-  if (libraryProvider() === "supabase") return await readSupabaseLibrary(owner) ?? demoLibrary();
+  if (libraryProvider() === "supabase") {
+    const library = await readSupabaseLibrary(owner) ?? demoLibrary();
+    return { ...library, photos: library.photos.filter(photo => !photo.demo) };
+  }
   const row = await db().prepare("SELECT data, revision FROM libraries WHERE owner = ?").bind(owner).first<{ data: string; revision: number }>();
-  return row ? { ...JSON.parse(row.data), revision: row.revision } : demoLibrary();
+  const library: Library = row ? { ...JSON.parse(row.data), revision: row.revision } : demoLibrary();
+  return { ...library, photos: library.photos.filter(photo => !photo.demo) };
 }
 export async function mutateLibrary(owner: string, update: (library: Library) => void, expected?: number) {
   const provider = libraryProvider();
   if (provider === "d1") await db().prepare("INSERT OR IGNORE INTO libraries (owner, data, revision) VALUES (?, ?, 0)").bind(owner, JSON.stringify(demoLibrary())).run();
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    // Concurrent uploads use optimistic revisions. Jitter avoids repeatedly
+    // colliding with the same writer, without relaxing conflict detection.
+    if (attempt) await new Promise(resolve => setTimeout(resolve, 40 * 2 ** Math.min(attempt, 4) + Math.random() * 100));
     const library = await readLibrary(owner);
     if (expected !== undefined && expected !== library.revision) throw new LibraryError("Dữ liệu vừa thay đổi. Hãy tải lại danh sách rồi thử lại.", 409);
     update(library);

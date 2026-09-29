@@ -8,8 +8,7 @@ async function signed(method: "GET" | "PUT" | "DELETE", key: string, contentType
   if (!url) throw new LibraryError("Chưa cấu hình đầy đủ Cloudflare R2.");
   return url;
 }
-export async function putOriginal(key: string, file: File, sha256: string) {
-  const provider = originalProvider();
+export async function putOriginal(key: string, file: File, sha256: string, provider = originalProvider()) {
   if (provider === "binding") {
     await bucket().put(key, file.stream(), { httpMetadata: { contentType: file.type }, customMetadata: { sha256 } });
   } else {

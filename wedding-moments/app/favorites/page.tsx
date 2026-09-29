@@ -1,2 +1,3 @@
-import Link from "next/link";import {ArrowLeft,Heart} from "lucide-react";
-export default function FavoritesPage(){return <main className="simple-page"><Link className="round-control" href="/"><ArrowLeft/></Link><div className="empty-favorites"><Heart/><p className="eyebrow ink">Bộ sưu tập của bạn</p><h1>Những khoảnh khắc<br/><em>bạn yêu thích.</em></h1><p>Chạm vào biểu tượng trái tim trong thư viện để lưu ảnh vào đây.</p><Link href="/album/le-thanh-hon">Khám phá thư viện</Link></div></main>}
+import { FavoritesGallery } from "@/components/favorites-gallery";
+import { requireChatGPTUser } from "@/app/chatgpt-auth";
+export default async function FavoritesPage(){await requireChatGPTUser("/favorites");return <main className="gallery-page"><FavoritesGallery /></main>}

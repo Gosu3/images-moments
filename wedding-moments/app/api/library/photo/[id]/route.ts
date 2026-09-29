@@ -2,6 +2,7 @@ import { libraryError, libraryOwner, LibraryError, readLibrary } from "@/lib/lib
 import { getOriginal } from "@/lib/original-storage";
 import { signedPreviewUrl } from "@/lib/cloudflare-images";
 import { imageDeliveryUrl } from "@/lib/image-service";
+import { getGalleryPreview } from "@/lib/gallery-preview";
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const owner = await libraryOwner(request);
@@ -17,6 +18,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       try {
         return new Response(null, { status: 302, headers: { Location: await signedPreviewUrl(photo.imageId), "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" } });
       } catch { /* Keep the original available if preview configuration is missing. */ }
+    }
+    const variant = new URL(request.url).searchParams.get("variant");
+    if (process.env.VERCEL && (variant === "thumbnail" || variant === "preview")) {
+      const preview = await getGalleryPreview(photo, variant);
+      return new Response(preview.body, { headers: { "Content-Type": "image/webp", "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" } });
     }
     const object = await getOriginal(photo);
     const headers = new Headers({ "Content-Type": photo.contentType ?? object.headers.get("content-type") ?? "application/octet-stream", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" });

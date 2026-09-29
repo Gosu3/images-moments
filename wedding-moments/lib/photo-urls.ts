@@ -6,10 +6,10 @@ function route(photo: DisplayPhoto, variant: string) {
   return `/api/library/photo/${encodeURIComponent(photo.id)}?variant=${variant}`;
 }
 export function getPhotoThumbnailUrl(photo: DisplayPhoto) {
-  return photo.pipeline === "r2-v2" ? route(photo, "thumbnail") : photo.preview;
+  return photo.key || photo.pipeline === "r2-v2" ? route(photo, "thumbnail") : photo.preview;
 }
 export function getPhotoPreviewUrl(photo: DisplayPhoto) {
-  return photo.pipeline === "r2-v2" ? route(photo, "preview") : photo.src;
+  return photo.key || photo.pipeline === "r2-v2" ? route(photo, "preview") : photo.src;
 }
 export function getOriginalDownloadEndpoint(photoId: string) {
   return `/api/photos/${encodeURIComponent(photoId)}/download`;

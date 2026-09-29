@@ -1,4 +1,4 @@
-import { albums, photos, type Photo } from "./mock-data";
+import { albums, type Photo } from "./mock-data";
 
 export type LibraryPhoto = Photo & {
   filename: string; demo?: boolean; key?: string; storage?: "binding" | "s3";
@@ -19,10 +19,7 @@ export type Library = { albums: LibraryAlbum[]; photos: LibraryPhoto[]; settings
 export function demoLibrary(): Library {
   return {
     albums: albums.map(({ slug, name, time }) => ({ slug, name, time })),
-    photos: albums.flatMap((album, a) => Array.from({ length: album.count }, (_, i) => {
-      const photo = photos[(a * 5 + i) % photos.length];
-      return { ...photo, id: `${album.slug}-${i + 1}`, album: album.slug, alt: `${album.name} — ảnh ${i + 1}`, filename: `${album.slug}-${i + 1}.webp`, demo: true };
-    })),
+    photos: [],
     settings: { adminName: "Thọ Nguyễn", title: "Khoảnh khắc của chúng mình" },
     revision: 0,
   };

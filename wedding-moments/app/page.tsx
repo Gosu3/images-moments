@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, Heart, Images, LockKeyhole } from "lucide-react";
 import { HomeAlbumTabs } from "@/components/home-album-tabs";
-import { photos } from "@/lib/mock-data";
 
 export default function Home() {
   return (
@@ -22,7 +21,7 @@ export default function Home() {
           <h1>Minh Anh <i>&amp;</i> Hoàng Nam</h1>
           <div className="compact-meta">
             <span><CalendarDays size={17}/>Hà Nội, Việt Nam</span>
-            <span><Images size={17}/>{photos.length * 28 + 13} khoảnh khắc</span>
+            <span><Images size={17}/>Album kỷ niệm</span>
             <span><LockKeyhole size={16}/>Thư viện riêng tư</span>
           </div>
         </div>

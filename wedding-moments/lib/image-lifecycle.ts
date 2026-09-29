@@ -24,7 +24,6 @@ export async function beginUpload(owner: string, body: unknown) {
       if (photo.status === "deleted") throw new LibraryError("Ảnh đã bị xóa.", 410);
       if (Date.parse(photo.processingUntil || "") > Date.now()) throw new LibraryError("Ảnh đang được xử lý. Hãy thử lại sau.", 409);
     } else {
-      if (data.photos.filter(p => p.pipeline === "r2-v2" && p.status !== "ready" && p.status !== "deleted").length >= 200) throw new LibraryError("Quá nhiều ảnh đang chờ. Hoàn tất hoặc dọn ảnh lỗi trước.", 429);
       photo = { id, album: input.album, filename: input.filename, alt: input.filename, src: "", preview: "", takenAt: now,
         width: 0, height: 0, key: `albums/${namespace}/${id}.${ext}`, previewKey: `albums/${namespace}/${id}.jpg`, stagingKey: `uploads/${namespace}/${id}.${ext}`,
         pipeline: "r2-v2", storage: "s3", status: "pending", size: input.size, sha256: input.sha256, contentType: input.contentType,

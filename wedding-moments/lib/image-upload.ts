@@ -8,10 +8,11 @@ export function validImageHeader(bytes: Uint8Array, type: string) {
 
 // Only the preview is resized/re-encoded. The File used for the original upload
 // is never replaced, so EXIF, colour data and original bytes remain intact.
-export async function prepareUpload(file: File) {
+export async function prepareUpload(file: File, createPreview = true) {
   const bitmap = await createImageBitmap(file);
   try {
     const width = bitmap.width, height = bitmap.height;
+    if (!createPreview) return { width, height, preview: undefined };
     const ratio = Math.min(1, 2400 / Math.max(width, height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(width * ratio));

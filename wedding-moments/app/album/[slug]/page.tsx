@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { GalleryExperience } from "@/components/gallery-experience";
-import { albums, photos } from "@/lib/mock-data";
+import { LibraryAlbumGallery } from "@/components/library-album-gallery";
+import { requireChatGPTUser } from "@/app/chatgpt-auth";
 export const metadata:Metadata={title:"Thư viện ảnh",robots:{index:false,follow:false}};
-export default async function AlbumPage({params}:{params:Promise<{slug:string}>}){const {slug}=await params;const album=albums.find(a=>a.slug===slug);if(!album)notFound();return <main className="gallery-page"><GalleryExperience photos={photos} albumName={album.name}/></main>}
+export default async function AlbumPage({params}:{params:Promise<{slug:string}>}){const {slug}=await params;await requireChatGPTUser(`/album/${encodeURIComponent(slug)}`);return <main className="gallery-page"><LibraryAlbumGallery slug={slug}/></main>}

@@ -43,6 +43,8 @@ export function AdminDashboard() {
   const [signingOut, setSigningOut] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploading = useRef(false);
+  const paused = useRef(false);
+  const [queuePaused, setQueuePaused] = useState(false);
   const work = useRef<QueueItem[]>([]);
   const filtered = data.photos.filter(p => isPhotoReady(p) && (!albumFilter || p.album === albumFilter) && (p.filename + p.alt).toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi")));
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 48) - 1));
@@ -84,20 +86,31 @@ export function AdminDashboard() {
   async function drainQueue() {
     if (uploading.current) return;
     uploading.current = true;
-    while (work.current.length) {
+    try {
+    // Discover once per batch: legacy uploads don't need a SHA-256 presign
+    // round trip or a generated preview when Cloudflare Images is disabled.
+    const response = await fetch("/api/library/storage", { cache: "no-store" });
+    const config = await response.json() as { pipeline: string; images: boolean; error?: string };
+    if (!response.ok) throw new Error(config.error || "Không thể kiểm tra cấu hình upload.");
+    const worker = async () => {
+    while (work.current.length && !paused.current) {
       const item = work.current.shift()!;
       setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "uploading" } : x));
       try {
-        const direct = await uploadDirect(item.file, item.album, item.id, progress => setQueue(q => q.map(x => x.id === item.id ? { ...x, progress } : x)));
+        const direct = config.pipeline === "r2-v2" && await uploadDirect(item.file, item.album, item.id, progress => setQueue(q => q.map(x => x.id === item.id ? { ...x, progress } : x)));
         if (direct) { setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: undefined } : x)); continue; }
-        const prepared = await prepareUpload(item.file);
+        const prepared = await prepareUpload(item.file, config.images);
         const form = new FormData(); form.append("file", item.file); form.append("album", item.album);
         form.append("width", String(prepared.width)); form.append("height", String(prepared.height));
-        form.append("preview", prepared.preview); form.append("uploadId", item.id);
+        if (prepared.preview) form.append("preview", prepared.preview);
+        form.append("uploadId", item.id);
         const warning = await new Promise<string | undefined>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open("POST", "/api/library/upload"); xhr.timeout = 180000;
-          xhr.upload.onprogress = e => { if (e.lengthComputable) setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: Math.min(99, Math.round(e.loaded / e.total * 100)) } : x)); };
+          xhr.upload.onprogress = e => { if (e.lengthComputable) {
+            const progress = Math.min(95, Math.round(e.loaded / e.total * 95));
+            setQueue(q => q.map(x => x.id === item.id && x.progress !== progress ? { ...x, progress } : x));
+          } };
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) { try { resolve(JSON.parse(xhr.responseText).warning); } catch { reject(new Error("Phản hồi tải ảnh không hợp lệ.")); } }
             else { let message = "Không thể tải ảnh."; try { message = JSON.parse(xhr.responseText).error || message; } catch {} reject(new Error(message)); }
@@ -109,7 +122,17 @@ export function AdminDashboard() {
         setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning } : x));
       } catch (e) { setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "failed", error: (e as Error).message } : x)); }
     }
-    uploading.current = false; await reload();
+    };
+    // Bound memory, bandwidth and concurrent database writers for large batches.
+    await Promise.all(Array.from({ length: 6 }, worker));
+    } catch (e) {
+      const pending = new Set(work.current.splice(0).map(item => item.id));
+      setQueue(q => q.map(item => pending.has(item.id) ? { ...item, status: "failed", error: (e as Error).message } : item));
+    } finally {
+      uploading.current = false;
+      await reload();
+      if (work.current.length && !paused.current) void drainQueue();
+    }
   }
   function addFiles(files: FileList | null) {
     if (!files || !ready || !currentUploadAlbum) return;
@@ -172,10 +195,20 @@ export function AdminDashboard() {
           {data.photos.filter(p => p.pipeline === "r2-v2" && p.status !== "ready" && p.status !== "deleted").map(p => <div className="admin-upload-row" key={p.id}><div><strong>{p.filename}</strong><small>{p.status === "processing" ? "Đang xử lý" : p.status === "pending" ? "Chờ upload hoàn tất" : "Xử lý thất bại"}</small></div><button disabled={busy} onClick={() => void retryProcessing(p.id)}>Thử lại xử lý</button><button disabled={busy} onClick={() => setConfirm({ text: `Xóa ảnh chưa hoàn tất “${p.filename}” và dọn file liên quan?`, operation: { action: "deletePhotos", ids: [p.id] } })}>Xóa</button></div>)}
           <button className="dropzone" disabled={!ready || !currentUploadAlbum} onClick={() => fileInput.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}><Plus /><strong>Kéo thả hoặc chọn ảnh</strong></button>
           <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
-          <div className="admin-toolbar"><h3>Hàng đợi</h3><button disabled={queue.some(q => q.status === "waiting" || q.status === "uploading")} onClick={() => setQueue([])}>Dọn danh sách</button></div>
+          <p className="admin-muted">Không giới hạn số ảnh trong mỗi lần chọn. Hệ thống tự tải song song tối đa 6 ảnh, giữ nguyên chất lượng ảnh gốc; giữ tab này mở đến khi hoàn tất.</p>
+          <div className="admin-toolbar"><h3>Hàng đợi</h3><span role="status">{queue.filter(q => q.status === "done").length}/{queue.length} hoàn tất · {queue.filter(q => q.status === "failed").length} lỗi</span>
+            <button onClick={() => { paused.current = !paused.current; setQueuePaused(paused.current); if (!paused.current) void drainQueue(); }}>{queuePaused ? "Tiếp tục tải" : "Tạm dừng sau ảnh đang tải"}</button>
+            <button disabled={!queue.some(q => q.status === "failed")} onClick={() => {
+              const failed = queue.filter(q => q.status === "failed" && ["image/jpeg", "image/png", "image/webp"].includes(q.file.type) && q.file.size > 0 && q.file.size <= 50 * 1024 * 1024);
+              work.current.push(...failed.filter(q => !work.current.some(w => w.id === q.id)));
+              const ids = new Set(failed.map(q => q.id));
+              setQueue(q => q.map(x => ids.has(x.id) ? { ...x, status: "waiting", progress: 0 } : x)); void drainQueue();
+            }}>Thử lại ảnh lỗi</button>
+            <button disabled={queue.some(q => q.status === "waiting" || q.status === "uploading")} onClick={() => setQueue([])}>Dọn danh sách</button></div>
           {!queue.length && <p className="admin-empty">Chưa có ảnh trong hàng đợi.</p>}
-          {queue.map(item => <div className="admin-upload-row" key={item.id}><div><strong>{item.file.name}</strong><small>{(item.file.size / 1024 / 1024).toFixed(1)} MB · {item.status === "done" ? item.warning || "Đã lưu ảnh gốc" : item.status === "failed" ? item.error : item.status === "uploading" ? "Đang tải / xử lý…" : "Đang chờ"}</small><progress max={100} value={item.progress} /></div>
+          {queue.filter(item => item.status !== "done" || item.warning).slice(0, 100).map(item => <div className="admin-upload-row" key={item.id}><div><strong>{item.file.name}</strong><small>{(item.file.size / 1024 / 1024).toFixed(1)} MB · {item.status === "done" ? item.warning || "Đã lưu ảnh gốc" : item.status === "failed" ? item.error : item.status === "uploading" ? item.progress >= 95 ? "Đang lưu / xử lý ảnh…" : "Đang truyền file…" : "Đang chờ"}</small><progress max={100} value={item.progress} /></div>
             {(item.status === "failed" || item.status === "done" && item.warning) && <button disabled={!ready} onClick={() => { if (work.current.some(q => q.id === item.id)) return; work.current.push(item); setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "waiting", progress: 0 } : x)); void drainQueue(); }}>Thử lại</button>}</div>)}
+          {queue.filter(item => item.status !== "done" || item.warning).length > 100 && <p>Hiển thị 100 ảnh đầu trong hàng đợi; các ảnh còn lại vẫn được tải tự động.</p>}
         </section>}
         {section === "settings" && <><StorageStatus /><form key={data.revision} className="admin-panel admin-form" onSubmit={e => { e.preventDefault(); const form = new FormData(e.currentTarget); void save({ action: "settings", adminName: form.get("adminName"), title: form.get("title") }); }}>
           <h2>Thông tin thư viện</h2><label>Tên quản trị viên<input name="adminName" required maxLength={100} defaultValue={data.settings.adminName} /></label><label>Tiêu đề thư viện ảnh<input name="title" required maxLength={150} defaultValue={data.settings.title} /></label>

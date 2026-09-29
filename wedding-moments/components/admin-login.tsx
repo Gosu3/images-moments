@@ -22,5 +22,5 @@ export function AdminLogin() {
       {error && <p role="alert">{error}</p>}
       <button disabled={busy}>{busy ? "Đang đăng nhập…" : "Đăng nhập"}</button>
     </form>
-  </section><img src="/wedding-portrait.webp" alt="" /></main>;
+  </section></main>;
 }
