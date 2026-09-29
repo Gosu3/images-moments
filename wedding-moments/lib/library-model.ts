@@ -1,6 +1,6 @@
 import { albums, photos, type Photo } from "./mock-data";
 
-export type LibraryPhoto = Photo & { filename: string; demo?: boolean; key?: string };
+export type LibraryPhoto = Photo & { filename: string; demo?: boolean; key?: string; storage?: "binding" | "s3"; size?: number; sha256?: string; contentType?: string; imageId?: string; previewStatus?: "ready" | "failed" | "disabled"; uploadId?: string };
 export type LibraryAlbum = { slug: string; name: string; time: string };
 export type Library = { albums: LibraryAlbum[]; photos: LibraryPhoto[]; settings: { adminName: string; title: string }; revision: number };
 

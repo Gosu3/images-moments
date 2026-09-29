@@ -20,11 +20,20 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 const form = new FormData();
 form.set('file', new File([png], 'test.png', { type: 'image/png' }));
 form.set('album', 'test'); form.set('width', '1'); form.set('height', '1');
+form.set('uploadId', crypto.randomUUID());
 const upload = await request('/api/library/upload', { method: 'POST', body: form });
 assert.equal(upload.status, 201, await upload.clone().text());
-const { id } = await upload.json();
+const { id, sha256 } = await upload.json();
+const expectedHash = Buffer.from(await crypto.subtle.digest('SHA-256', png)).toString('hex');
+assert.equal(sha256, expectedHash);
+const retry = await request('/api/library/upload', { method: 'POST', body: form });
+assert.equal(retry.status, 201);
+assert.equal((await retry.json()).id, id);
+assert.equal((await read()).photos.filter(p => p.id === id).length, 1);
+assert.equal((await request('/api/library/storage')).status, 200);
 const photo = await request(`/api/library/photo/${id}`);
 assert.equal(photo.status, 200);
+assert.equal(photo.headers.get('X-Original-SHA256'), expectedHash);
 assert.deepEqual(Buffer.from(await photo.arrayBuffer()), png);
 assert.equal((await request(`/api/library/photo/${id}`, { headers: { 'oai-authenticated-user-id': owner + '-other' } })).status, 404);
 library = await read();
@@ -39,5 +48,6 @@ assert.equal((await write({ action: 'deleteAlbum', slug: 'test' }, library.revis
 library = await read();
 assert.equal((await write({ action: 'settings', adminName: 'Thọ Nguyễn', title: 'Thư viện kiểm thử' }, library.revision)).status, 200);
 assert.equal((await read()).settings.title, 'Thư viện kiểm thử');
+assert.equal((await request('/api/uploads/presign', { method: 'POST' })).status, 410);
 assert.equal((await request('/api/library', { method: 'POST', headers: { origin: 'https://invalid.example', 'content-type': 'application/json' }, body: '{}' })).status, 403);
 console.log('PASS: authentication, origin protection, album CRUD, revisions, upload, exact original bytes, owner isolation, move/delete photos, persistent settings.');

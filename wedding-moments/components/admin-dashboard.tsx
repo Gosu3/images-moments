@@ -7,6 +7,8 @@ import { PhotoViewer } from "@/components/photo-viewer";
 import { useLibrary } from "@/lib/use-library";
 import { savePhotoToDevice } from "@/lib/save-photo";
 import type { LibraryAlbum, LibraryPhoto } from "@/lib/library-model";
+import { prepareUpload } from "@/lib/image-upload";
+import { StorageStatus } from "@/components/storage-status";
 
 const sections = [
   { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
@@ -17,7 +19,7 @@ const sections = [
   { id: "settings", label: "Cài đặt", icon: Settings },
 ] as const;
 type Section = typeof sections[number]["id"];
-type QueueItem = { id: string; file: File; album: string; progress: number; status: "waiting" | "uploading" | "done" | "failed"; error?: string };
+type QueueItem = { id: string; file: File; album: string; progress: number; status: "waiting" | "uploading" | "done" | "failed"; error?: string; warning?: string };
 
 export function AdminDashboard() {
   const { data, ready, error, reload, mutate } = useLibrary();
@@ -62,22 +64,23 @@ export function AdminDashboard() {
       const item = work.current.shift()!;
       setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "uploading" } : x));
       try {
-        const bitmap = await createImageBitmap(item.file);
+        const prepared = await prepareUpload(item.file);
         const form = new FormData(); form.append("file", item.file); form.append("album", item.album);
-        form.append("width", String(bitmap.width)); form.append("height", String(bitmap.height)); bitmap.close();
-        await new Promise<void>((resolve, reject) => {
+        form.append("width", String(prepared.width)); form.append("height", String(prepared.height));
+        form.append("preview", prepared.preview); form.append("uploadId", item.id);
+        const warning = await new Promise<string | undefined>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open("POST", "/api/library/upload"); xhr.timeout = 180000;
           xhr.upload.onprogress = e => { if (e.lengthComputable) setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: Math.min(99, Math.round(e.loaded / e.total * 100)) } : x)); };
           xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            if (xhr.status >= 200 && xhr.status < 300) { try { resolve(JSON.parse(xhr.responseText).warning); } catch { reject(new Error("Phản hồi tải ảnh không hợp lệ.")); } }
             else { let message = "Không thể tải ảnh."; try { message = JSON.parse(xhr.responseText).error || message; } catch {} reject(new Error(message)); }
           };
           xhr.onerror = () => reject(new Error("Mất kết nối. Hãy thử lại."));
           xhr.ontimeout = () => reject(new Error("Tải ảnh quá lâu. Hãy thử lại."));
           xhr.send(form);
         });
-        setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done" } : x));
+        setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning } : x));
       } catch (e) { setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "failed", error: (e as Error).message } : x)); }
     }
     uploading.current = false; await reload();
@@ -144,13 +147,13 @@ export function AdminDashboard() {
           <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
           <div className="admin-toolbar"><h3>Hàng đợi</h3><button disabled={queue.some(q => q.status === "waiting" || q.status === "uploading")} onClick={() => setQueue([])}>Dọn danh sách</button></div>
           {!queue.length && <p className="admin-empty">Chưa có ảnh trong hàng đợi.</p>}
-          {queue.map(item => <div className="admin-upload-row" key={item.id}><div><strong>{item.file.name}</strong><small>{(item.file.size / 1024 / 1024).toFixed(1)} MB · {item.status === "done" ? "Đã lưu" : item.status === "failed" ? item.error : item.status === "uploading" ? "Đang tải…" : "Đang chờ"}</small><progress max={100} value={item.progress} /></div>
-            {item.status === "failed" && <button disabled={!ready} onClick={() => { if (work.current.some(q => q.id === item.id)) return; work.current.push(item); setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "waiting", progress: 0 } : x)); void drainQueue(); }}>Thử lại</button>}</div>)}
+          {queue.map(item => <div className="admin-upload-row" key={item.id}><div><strong>{item.file.name}</strong><small>{(item.file.size / 1024 / 1024).toFixed(1)} MB · {item.status === "done" ? item.warning || "Đã lưu ảnh gốc" : item.status === "failed" ? item.error : item.status === "uploading" ? "Đang tải / xử lý…" : "Đang chờ"}</small><progress max={100} value={item.progress} /></div>
+            {(item.status === "failed" || item.status === "done" && item.warning) && <button disabled={!ready} onClick={() => { if (work.current.some(q => q.id === item.id)) return; work.current.push(item); setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "waiting", progress: 0 } : x)); void drainQueue(); }}>Thử lại</button>}</div>)}
         </section>}
-        {section === "settings" && <form key={data.revision} className="admin-panel admin-form" onSubmit={e => { e.preventDefault(); const form = new FormData(e.currentTarget); void save({ action: "settings", adminName: form.get("adminName"), title: form.get("title") }); }}>
+        {section === "settings" && <><StorageStatus /><form key={data.revision} className="admin-panel admin-form" onSubmit={e => { e.preventDefault(); const form = new FormData(e.currentTarget); void save({ action: "settings", adminName: form.get("adminName"), title: form.get("title") }); }}>
           <h2>Thông tin thư viện</h2><label>Tên quản trị viên<input name="adminName" required maxLength={100} defaultValue={data.settings.adminName} /></label><label>Tiêu đề thư viện ảnh<input name="title" required maxLength={150} defaultValue={data.settings.title} /></label>
           <p className="admin-muted">Máy tính tải file qua trình duyệt. Điện thoại hỗ trợ chia sẻ file sẽ mở menu lưu ảnh của hệ thống.</p><button disabled={!ready || busy} type="submit">Lưu cài đặt</button>
-        </form>}
+        </form></>}
       </div>
       <AlertDialog open={confirm !== null} onOpenChange={open => { if (!open) setConfirm(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Xác nhận xóa</AlertDialogTitle><AlertDialogDescription>{confirm?.text}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Hủy</AlertDialogCancel><AlertDialogAction onClick={() => { if (confirm) void save(confirm.operation); setConfirm(null); }}>Xóa</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </main>

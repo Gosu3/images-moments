@@ -1,5 +1,9 @@
 # Architecture
 
+> Tài liệu dưới đây là kiến trúc mục tiêu ban đầu, không phải toàn bộ chức năng
+> đã triển khai. Trạng thái tích hợp hiện tại, giới hạn và cách cấu hình thực tế:
+> [SETUP-STORAGE-VI.md](./SETUP-STORAGE-VI.md).
+
 ## Quyết định
 
 Next.js chịu trách nhiệm UI, authorization, metadata và business logic. Supabase là nguồn dữ liệu quan hệ và danh tính admin. R2 giữ byte gốc. Cloudflare CDN/Image Transformations cung cấp biến thể ảnh. Lựa chọn này tránh biến application server thành image server và giữ đường dữ liệu lớn ngoài serverless runtime.

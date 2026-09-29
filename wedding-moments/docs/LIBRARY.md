@@ -1,5 +1,9 @@
 # Library administration
 
+Optional Supabase + external R2 + Cloudflare Images integration is now available.
+See [the setup guide](./SETUP-STORAGE-VI.md) before selecting providers; defaults
+remain D1 and the existing R2 binding. No automatic data migration is performed.
+
 The six admin sections use `/api/library`, backed by the Sites D1 binding `DB`.
 Original JPEG, PNG and WebP uploads use the R2 binding `BUCKET`; all records and
 image reads are scoped to the authenticated ChatGPT user. A visitor without a

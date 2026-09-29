@@ -1,5 +1,10 @@
 # Security
 
+> Đây là các yêu cầu thiết kế mục tiêu. Bản hiện tại dùng xác thực Sites,
+> server-scoped Supabase JSONB và R2/Images riêng tư; chưa có Supabase Auth,
+> guest PIN/rate-limit, quét malware hay xử lý EXIF server. Xem phạm vi thực tế
+> trong [SETUP-STORAGE-VI.md](./SETUP-STORAGE-VI.md).
+
 ## Trust boundaries
 
 Client input không đáng tin. API kiểm tra auth, ownership, schema, rate limit và trạng thái resource. Supabase RLS là lớp phòng thủ bổ sung, không thay thế authorization ở server.
