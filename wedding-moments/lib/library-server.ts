@@ -45,5 +45,8 @@ export async function mutateLibrary(owner: string, update: (library: Library) =>
 export function libraryError(error: unknown) {
   if (error instanceof LibraryError) return Response.json({ error: error.message }, { status: error.status });
   console.error("Library request failed", error);
+  if (error instanceof Error && (error.message.includes("Supabase") || error.message.includes("Kho thư viện"))) {
+    return Response.json({ error: error.message }, { status: 503 });
+  }
   return Response.json({ error: "Không thể lưu hoặc tải thư viện. Vui lòng thử lại." }, { status: 503 });
 }

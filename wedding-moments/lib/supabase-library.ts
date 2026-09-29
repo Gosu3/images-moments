@@ -13,7 +13,17 @@ async function rest(path: string, init: RequestInit = {}) {
   if (!key.startsWith("sb_secret_")) headers.set("Authorization", `Bearer ${key}`);
   headers.set("Content-Type", "application/json");
   const response = await fetch(`${url.origin}/rest/v1/${path}`, { ...init, headers, cache: "no-store", signal: AbortSignal.timeout(20000) });
-  if (!response.ok) throw new Error(`Supabase request failed (${response.status})`);
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500);
+    console.error("Supabase request failed", { path, status: response.status, detail });
+    throw new Error(
+      response.status === 404
+        ? "Kho thư viện Supabase chưa được khởi tạo. Hãy chạy migration wm_libraries."
+        : response.status === 401 || response.status === 403
+          ? "Supabase từ chối khóa truy cập thư viện. Hãy kiểm tra SUPABASE_SECRET_KEY."
+          : `Không thể kết nối kho thư viện Supabase (${response.status}).`,
+    );
+  }
   return response;
 }
 export async function readSupabaseLibrary(owner: string): Promise<Library | null> {

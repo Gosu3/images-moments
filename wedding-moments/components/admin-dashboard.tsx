@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Album, Download, ImageIcon, LayoutDashboard, LogOut, Plus, Settings, Upload } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -24,7 +25,8 @@ type Section = typeof sections[number]["id"];
 type QueueItem = { id: string; file: File; album: string; progress: number; status: "waiting" | "uploading" | "done" | "failed"; error?: string; warning?: string };
 
 export function AdminDashboard() {
-  const { data, ready, error, reload, mutate } = useLibrary();
+  const router = useRouter();
+  const { data, ready, error, authRequired, reload, mutate } = useLibrary();
   const [section, setSection] = useState<Section>("overview");
   const [albumFilter, setAlbumFilter] = useState("");
   const [query, setQuery] = useState("");
@@ -38,6 +40,7 @@ export function AdminDashboard() {
   const [uploadAlbum, setUploadAlbum] = useState("le-thanh-hon");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [history, setHistory] = useState<{ name: string; status: string }[]>([]);
+  const [signingOut, setSigningOut] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploading = useRef(false);
   const work = useRef<QueueItem[]>([]);
@@ -45,6 +48,15 @@ export function AdminDashboard() {
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 48) - 1));
   const shown = filtered.slice(currentPage * 48, currentPage * 48 + 48);
   const currentUploadAlbum = data.albums.some(a => a.slug === uploadAlbum) ? uploadAlbum : data.albums[0]?.slug ?? "";
+  async function signOut() {
+    setSigningOut(true);
+    try {
+      await fetch("/api/admin/session", { method: "DELETE" });
+    } finally {
+      router.replace("/admin/login");
+      router.refresh();
+    }
+  }
   async function retryProcessing(id: string) {
     setBusy(true);
     try {
@@ -112,11 +124,11 @@ export function AdminDashboard() {
   return <div className="admin-shell">
     <aside className="admin-sidebar"><Link className="admin-brand" href="/"><span>WM</span><div>Wedding<br />Moments</div></Link>
       <nav aria-label="Quản trị">{sections.map(({ id, label, icon: Icon }) => <button key={id} aria-current={section === id ? "page" : undefined} className={section === id ? "active" : ""} onClick={() => { setSection(id); setNotice(""); }}><Icon size={18} />{label}</button>)}</nav>
-      <Link href="/" className="admin-logout"><LogOut size={17} />Xem trang cưới</Link>
+      <button className="admin-logout" disabled={signingOut} onClick={() => void signOut()}><LogOut size={17} />{signingOut ? "Đang đăng xuất…" : "Đăng xuất"}</button>
     </aside>
     <main className="admin-main"><header><div><p>Quản trị thư viện</p><h1>{sections.find(s => s.id === section)?.label}</h1></div><div className="admin-user"><span>TN</span><div><strong>{data.settings.adminName}</strong><small>Quản trị viên</small></div></div></header>
       <div className="admin-content">
-        {error && <div className="admin-alert" role="alert">{error} <a href="/signin-with-chatgpt?return_to=/admin" target="_top">Đăng nhập</a><button onClick={() => void reload()}>Thử lại</button></div>}
+        {error && <div className="admin-alert" role="alert">{error} {authRequired && <a href="/admin/login?return_to=%2Fadmin">Đăng nhập lại</a>}<button onClick={() => void reload()}>Thử lại</button></div>}
         {notice && <p className="admin-notice" role="status">{notice}</p>}
         {section === "overview" && <>
           <div className="admin-stats"><article><small>Album</small><strong>{data.albums.length}</strong></article><article><small>Ảnh trong thư viện</small><strong>{data.photos.length}</strong></article><article><small>Ảnh đã tải lên</small><strong>{data.photos.filter(p => !p.demo).length}</strong></article></div>
