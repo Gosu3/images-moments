@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, Expand, Heart, ImageDown, Play, QrCode, Share2, X } from "lucide-react";
 import type { Photo } from "@/lib/mock-data";
+import { savePhotoToDevice } from "@/lib/save-photo";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 export function GalleryExperience({ photos, albumName }: { photos: Photo[]; albumName: string }) {
@@ -12,6 +13,7 @@ export function GalleryExperience({ photos, albumName }: { photos: Photo[]; albu
   const [favorites, setFavorites] = useState<Set<string>>(() => { if(typeof window==="undefined") return new Set(); const saved=window.localStorage.getItem("wm-favorites"); return saved?new Set(JSON.parse(saved) as string[]):new Set(); });
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [downloadNotice, setDownloadNotice] = useState("");
   const touchStart = useRef<{x:number;y:number}|null>(null);
 
   const saveFavorites = (next:Set<string>) => { setFavorites(next); window.localStorage.setItem("wm-favorites", JSON.stringify([...next])); };
@@ -31,6 +33,7 @@ export function GalleryExperience({ photos, albumName }: { photos: Photo[]; albu
     if(navigator.share) await navigator.share({title:albumName,text:"Cùng xem khoảnh khắc này nhé",url});
     else { await navigator.clipboard.writeText(url); alert("Đã sao chép liên kết"); }
   };
+  const downloadPhoto=async(photo:Photo)=>{try{const result=await savePhotoToDevice(`/api/photos/${photo.id}/download`,`wedding-moment-${photo.id}.jpg`);setDownloadNotice(result==="shared"?"Đã mở menu lưu ảnh của điện thoại.":"Ảnh đã được tải về.")}catch(error){if((error as Error).name!=="AbortError")setDownloadNotice("Chưa thể tải ảnh. Vui lòng thử lại.")}};
 
   return <>
     <header className="gallery-header">
@@ -46,11 +49,12 @@ export function GalleryExperience({ photos, albumName }: { photos: Photo[]; albu
       <Link className="slideshow-btn" href="/qr/album/le-thanh-hon"><QrCode size={15}/> Mã QR</Link><button className="slideshow-btn" onClick={()=>setActive(0)}><Play size={15} fill="currentColor"/> Trình chiếu</button>
     </section>
     <section className="photo-grid" aria-label={`Ảnh trong ${albumName}`}>
-      {photos.slice(0,visible).map((photo,index)=><button key={photo.id} className="photo-card" style={{aspectRatio:`${photo.width}/${photo.height}`}} onClick={()=>selectMode?toggleSelected(photo.id):setActive(index)} aria-label={`${selectMode?"Chọn":"Mở"} ${photo.alt}`}>
-        <img src={photo.preview} alt={photo.alt} loading={index<4?"eager":"lazy"} decoding="async" />
+      {photos.slice(0,visible).map((photo,index)=><div key={photo.id} className="photo-card" style={{aspectRatio:`${photo.width}/${photo.height}`}}>
+        <button className="photo-open" onClick={()=>selectMode?toggleSelected(photo.id):setActive(index)} aria-label={`${selectMode?"Chọn":"Mở"} ${photo.alt}`}><img src={photo.preview} alt={photo.alt} loading={index<4?"eager":"lazy"} decoding="async" /></button>
         {selectMode&&<span className={selected.has(photo.id)?"select-dot selected":"select-dot"}>{selected.has(photo.id)&&<Check size={16}/>}</span>}
         {!selectMode&&<span className="photo-time">{photo.takenAt}</span>}
-      </button>)}
+        {!selectMode&&<button className="photo-download" onClick={()=>downloadPhoto(photo)}><Download size={16}/><span>Tải về</span></button>}
+      </div>)}
     </section>
     {visible<photos.length&&<div className="load-more"><button onClick={()=>setVisible(v=>Math.min(v+6,photos.length))}>Xem thêm khoảnh khắc <span>{visible} / {photos.length}</span></button></div>}
 
@@ -60,7 +64,7 @@ export function GalleryExperience({ photos, albumName }: { photos: Photo[]; albu
       <DialogContent className="lightbox" showCloseButton={false} onTouchStart={e=>touchStart.current={x:e.touches[0].clientX,y:e.touches[0].clientY}} onTouchEnd={e=>{if(!touchStart.current)return;const dx=e.changedTouches[0].clientX-touchStart.current.x;const dy=e.changedTouches[0].clientY-touchStart.current.y;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy))move(dx<0?1:-1);if(dy>100&&Math.abs(dy)>Math.abs(dx))setActive(null);touchStart.current=null}}>
         <DialogTitle className="sr-only">Xem ảnh toàn màn hình</DialogTitle><DialogDescription className="sr-only">Vuốt hoặc dùng phím mũi tên để chuyển ảnh.</DialogDescription>
         {current&&<>
-          <div className="lightbox-top"><span>{active!+1} / {photos.length}</span><div><button onClick={()=>toggleFavorite(current.id)} aria-label="Yêu thích"><Heart fill={favorites.has(current.id)?"currentColor":"none"}/></button><button onClick={share} aria-label="Chia sẻ"><Share2/></button><a href={`/api/photos/${current.id}/download`} aria-label="Tải ảnh gốc"><Download/></a><button onClick={()=>document.documentElement.requestFullscreen?.()} aria-label="Toàn màn hình"><Expand/></button><button onClick={()=>setActive(null)} aria-label="Đóng"><X/></button></div></div>
+          <div className="lightbox-top"><span>{active!+1} / {photos.length}</span><div><button onClick={()=>toggleFavorite(current.id)} aria-label="Yêu thích"><Heart fill={favorites.has(current.id)?"currentColor":"none"}/></button><button onClick={share} aria-label="Chia sẻ"><Share2/></button><button onClick={()=>downloadPhoto(current)} aria-label="Tải ảnh về thiết bị"><Download/></button><button onClick={()=>document.documentElement.requestFullscreen?.()} aria-label="Toàn màn hình"><Expand/></button><button onClick={()=>setActive(null)} aria-label="Đóng"><X/></button></div></div>
           <button className="lightbox-arrow left" onClick={()=>move(-1)} aria-label="Ảnh trước"><ChevronLeft/></button>
           <div className="lightbox-stage"><img key={current.id} src={current.src} alt={current.alt}/></div>
           <button className="lightbox-arrow right" onClick={()=>move(1)} aria-label="Ảnh sau"><ChevronRight/></button>
@@ -68,5 +72,6 @@ export function GalleryExperience({ photos, albumName }: { photos: Photo[]; albu
         </>}
       </DialogContent>
     </Dialog>
+    <p className="gallery-download-notice" role="status" aria-live="polite">{downloadNotice}</p>
   </>;
 }
