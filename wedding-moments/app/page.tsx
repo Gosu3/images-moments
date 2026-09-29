@@ -26,7 +26,6 @@ export default function Home() {
             <span><LockKeyhole size={16}/>Thư viện riêng tư</span>
           </div>
         </div>
-        <figure className="overview-cover"><img src="/wedding-hero.webp" alt="Minh Anh và Hoàng Nam trong ánh hoàng hôn" fetchPriority="high"/></figure>
         <div className="overview-story">
           <p className="eyebrow ink">Our Story</p>
           <h2>Một ngày để nhớ,<br/><em>một đời để thương.</em></h2>
