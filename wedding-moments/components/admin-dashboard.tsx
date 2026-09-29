@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Album, Download, ImageIcon, LayoutDashboard, LogOut, Plus, Settings, Upload } from "lucide-react";
@@ -43,6 +43,7 @@ export function AdminDashboard() {
   const [signingOut, setSigningOut] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploading = useRef(false);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const paused = useRef(false);
   const [queuePaused, setQueuePaused] = useState(false);
   const work = useRef<QueueItem[]>([]);
@@ -50,6 +51,11 @@ export function AdminDashboard() {
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 48) - 1));
   const shown = filtered.slice(currentPage * 48, currentPage * 48 + 48);
   const currentUploadAlbum = data.albums.some(a => a.slug === uploadAlbum) ? uploadAlbum : data.albums[0]?.slug ?? "";
+  useEffect(() => () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); }, []);
+  function scheduleLibraryReload() {
+    if (reloadTimer.current) return;
+    reloadTimer.current = setTimeout(() => { reloadTimer.current = null; void reload(); }, 750);
+  }
   async function signOut() {
     setSigningOut(true);
     try {
@@ -98,7 +104,11 @@ export function AdminDashboard() {
       setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "uploading" } : x));
       try {
         const direct = config.pipeline !== "legacy" && await uploadDirect(item.file, item.album, item.id, progress => setQueue(q => q.map(x => x.id === item.id ? { ...x, progress } : x)));
-        if (direct) { setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: undefined } : x)); continue; }
+        if (direct) {
+          setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: undefined } : x));
+          scheduleLibraryReload();
+          continue;
+        }
         const prepared = await prepareUpload(item.file, config.images, config.pipeline === "legacy");
         const form = new FormData(); form.append("file", prepared.uploadFile); form.append("album", item.album);
         form.append("width", String(prepared.width)); form.append("height", String(prepared.height));
@@ -121,6 +131,7 @@ export function AdminDashboard() {
         });
         const localWarning = prepared.optimized ? `Ảnh ${item.file.name} đã được tối ưu WebP chất lượng cao để vượt giới hạn upload của Vercel.` : undefined;
         setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: warning || localWarning } : x));
+        scheduleLibraryReload();
       } catch (e) { setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "failed", error: (e as Error).message } : x)); }
     }
     };

@@ -5,9 +5,8 @@ import { createR2SignedUrl } from "./r2-presign";
 import { UPLOAD_TTL } from "./image-protocol";
 import type { LibraryPhoto } from "./library-model";
 import { directR2Enabled } from "./cloud-config";
-import { getOriginal, headOriginal, removeUncommittedOriginal } from "./original-storage";
-import { galleryVariantKey, prepareGalleryPreviews } from "./gallery-preview";
-import { validImageHeader } from "./image-upload";
+import { headOriginal, removeUncommittedOriginal } from "./original-storage";
+import { galleryVariantKey } from "./gallery-preview";
 
 export const uploadRequest = z.object({ album: z.string().min(1).max(100), filename: z.string().min(1).max(255),
   contentType: z.enum(["image/jpeg", "image/png", "image/webp"]), size: z.number().int().positive().max(50 * 1024 * 1024),
@@ -68,15 +67,14 @@ export async function finalizeUpload(owner: string, id: string) {
       result = await imageServiceCall<ProcessedImage>("process", { key: photo.key, previewKey: photo.previewKey, stagingKey: photo.stagingKey,
         size: photo.size, sha256: photo.sha256, contentType: photo.contentType });
     } else {
+      // The browser already uploaded the original directly to R2. Finalization
+      // must stay lightweight: Vercel should not download and transform the
+      // complete file before it can appear in the library. Gallery variants
+      // are generated once and persisted by the photo route on first access.
       const object = await headOriginal(photo);
       if (!Number.isFinite(object.size) || object.size !== photo.size || object.contentType !== photo.contentType) {
         throw new LibraryError("File trên R2 không khớp dung lượng hoặc định dạng đã chọn.", 422);
       }
-      const bytes = new Uint8Array(await (await getOriginal(photo)).arrayBuffer());
-      if (!validImageHeader(bytes.subarray(0, 32), photo.contentType!)) throw new LibraryError("Nội dung file trên R2 không khớp định dạng ảnh.", 422);
-      const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(byte => byte.toString(16).padStart(2, "0")).join("");
-      if (digest !== photo.sha256) throw new LibraryError("Checksum ảnh trên R2 không khớp file đã chọn.", 422);
-      await prepareGalleryPreviews(photo, bytes);
     }
     const saved = await mutateLibrary(owner, data => {
       const target = data.photos.find(p => p.id === id);
@@ -87,7 +85,14 @@ export async function finalizeUpload(owner: string, id: string) {
   } catch (error) {
     await mutateLibrary(owner, data => {
       const target = data.photos.find(p => p.id === id);
-      if (target?.processingToken === token && target.status !== "deleted") { target.status = "failed"; target.error = "Xử lý ảnh thất bại; có thể thử lại."; }
+      if (target?.processingToken === token && target.status !== "deleted") {
+        target.status = "failed";
+        target.error = error instanceof Error ? error.message : "Xử lý ảnh thất bại; có thể thử lại.";
+        if (target.pipeline === "r2-direct") {
+          target.processingToken = undefined;
+          target.processingUntil = undefined;
+        }
+      }
       // Keep lease until expiry, even after timeout: a remote job might still be
       // finishing. Cleanup must not race with that job.
     }).catch(() => undefined);
