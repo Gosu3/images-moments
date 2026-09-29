@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { isVercelAdmin } from "@/lib/admin-session";
 
 export type ChatGPTUser = {
   userId: string;
@@ -19,9 +20,11 @@ const SIGN_OUT_PATH = "/signout-with-chatgpt";
 const CALLBACK_PATH = "/callback";
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
-  // Vercel has no trusted ChatGPT authentication proxy. Never accept
-  // caller-supplied identity headers as administrator credentials there.
-  if (process.env.VERCEL) return null;
+  // Vercel has no trusted ChatGPT authentication proxy. Use a signed,
+  // HTTP-only administrator session instead of caller-supplied headers.
+  if (process.env.VERCEL) return await isVercelAdmin() ? {
+    userId: "vercel-admin", displayName: "Thọ Nguyễn", email: "admin@wedding.local", fullName: "Thọ Nguyễn",
+  } : null;
   const requestHeaders = await headers();
   const userId = requestHeaders.get(USER_ID_HEADER);
   const email = requestHeaders.get(USER_EMAIL_HEADER);
@@ -47,6 +50,8 @@ export async function requireChatGPTUser(
 ): Promise<ChatGPTUser> {
   const user = await getChatGPTUser();
   if (user) return user;
+
+  if (process.env.VERCEL) redirect(`/admin/login?return_to=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`);
 
   redirect(chatGPTSignInPath(returnTo));
 }
