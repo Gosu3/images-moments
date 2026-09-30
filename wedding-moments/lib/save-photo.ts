@@ -1,8 +1,20 @@
-export type SaveResult = "shared" | "downloaded";
+export type SaveResult = "shared" | "downloaded" | "ready";
 import type { Photo } from "./mock-data";
 import type { LibraryPhoto } from "./library-model";
 import { getOriginalDownloadEndpoint } from "./photo-urls";
 import { fetchOriginal } from "./fetch-original";
+
+let readyFile: File | null = null;
+const listeners = new Set<() => void>();
+export function subscribeReadyDownload(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
+export function getReadyDownload() { return readyFile; }
+export function clearReadyDownload() { readyFile = null; listeners.forEach(listener => listener()); }
+export async function shareReadyDownload() {
+  const file = readyFile;
+  if (!file) return;
+  await navigator.share({ files: [file], title: "Lưu ảnh cưới" });
+  if (readyFile === file) clearReadyDownload();
+}
 
 export async function downloadOriginal(photo: Photo & Partial<LibraryPhoto>): Promise<SaveResult> {
   const filename = photo.filename || `wedding-moment-${photo.id}.jpg`;
@@ -28,8 +40,16 @@ export async function savePhotoToDevice(url:string,filename:string,photoId?:stri
   const file=new File([blob],safeName,{type:blob.type||"image/jpeg"});
   const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
   if(isMobile&&typeof navigator.share==="function"&&typeof navigator.canShare==="function"&&navigator.canShare({files:[file]})){
-    await navigator.share({files:[file],title:"Lưu ảnh cưới",text:"Chọn “Lưu hình ảnh” để thêm ảnh vào thư viện trên điện thoại."});
-    return "shared";
+    try {
+      await navigator.share({files:[file],title:"Lưu ảnh cưới",text:"Chọn “Lưu hình ảnh” để thêm ảnh vào thư viện trên điện thoại."});
+      return "shared";
+    } catch (error) {
+      // Viewing another photo can consume the original user activation while
+      // the file downloads. Retain the exact original for a fresh Save tap.
+      if (!(error instanceof Error) || !["NotAllowedError", "InvalidStateError"].includes(error.name)) throw error;
+      readyFile = file; listeners.forEach(listener => listener());
+      return "ready";
+    }
   }
   const objectUrl=URL.createObjectURL(blob);const link=document.createElement("a");link.href=objectUrl;link.download=safeName;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);return "downloaded";
 }
