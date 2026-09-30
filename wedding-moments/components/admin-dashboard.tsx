@@ -12,6 +12,8 @@ import { StorageStatus } from "@/components/storage-status";
 import { uploadDirect } from "@/lib/direct-upload";
 import { getPhotoThumbnailUrl, isPhotoReady } from "@/lib/photo-urls";
 import { downloadOriginal } from "@/lib/save-photo";
+import { DUPLICATE_UPLOAD_CODE, DuplicateUploadError, findDuplicatePhoto, normalizedFilename } from "@/lib/upload-duplicates";
+import { createQueueItems, DUPLICATE_QUEUE_TTL, pruneDuplicateQueue, type QueueItem } from "@/lib/upload-queue";
 
 const sections = [
   { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
@@ -22,7 +24,6 @@ const sections = [
   { id: "settings", label: "Cài đặt", icon: Settings },
 ] as const;
 type Section = typeof sections[number]["id"];
-type QueueItem = { id: string; file: File; album: string; progress: number; status: "waiting" | "uploading" | "done" | "failed"; error?: string; warning?: string };
 
 export function AdminDashboard() {
   const router = useRouter();
@@ -47,11 +48,35 @@ export function AdminDashboard() {
   const paused = useRef(false);
   const [queuePaused, setQueuePaused] = useState(false);
   const work = useRef<QueueItem[]>([]);
+  const reservedNames = useRef(new Map<string, string>());
+  const libraryPhotos = useRef(data.photos);
+  const nextDuplicateExpiry = queue.reduce((next, item) => item.status === "duplicate" && item.duplicateAt !== undefined ? Math.min(next, item.duplicateAt + DUPLICATE_QUEUE_TTL) : next, Infinity);
+  const uploadItems = queue.filter(item => item.status !== "duplicate");
   const filtered = data.photos.filter(p => isPhotoReady(p) && (!albumFilter || p.album === albumFilter) && (p.filename + p.alt).toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi")));
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 48) - 1));
   const shown = filtered.slice(currentPage * 48, currentPage * 48 + 48);
   const currentUploadAlbum = data.albums.some(a => a.slug === uploadAlbum) ? uploadAlbum : data.albums[0]?.slug ?? "";
   useEffect(() => () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); }, []);
+  useEffect(() => {
+    libraryPhotos.current = data.photos;
+    for (const photo of data.photos) {
+      const name = normalizedFilename(photo.filename);
+      if (photo.uploadId && reservedNames.current.get(name) === photo.uploadId) reservedNames.current.delete(name);
+    }
+  }, [data.photos]);
+  useEffect(() => {
+    if (!Number.isFinite(nextDuplicateExpiry)) return;
+    const sweep = () => setQueue(q => pruneDuplicateQueue(q));
+    const visible = () => { if (!document.hidden) sweep(); };
+    const timer = setTimeout(sweep, Math.max(0, nextDuplicateExpiry - Date.now()));
+    window.addEventListener("focus", sweep);
+    document.addEventListener("visibilitychange", visible);
+    return () => { clearTimeout(timer); window.removeEventListener("focus", sweep); document.removeEventListener("visibilitychange", visible); };
+  }, [nextDuplicateExpiry]);
+  function releaseName(item: QueueItem) {
+    const name = normalizedFilename(item.file.name);
+    if (reservedNames.current.get(name) === item.id) reservedNames.current.delete(name);
+  }
   function scheduleLibraryReload() {
     if (reloadTimer.current) return;
     reloadTimer.current = setTimeout(() => { reloadTimer.current = null; void reload(); }, 750);
@@ -92,7 +117,7 @@ export function AdminDashboard() {
     }
   }
   async function drainQueue() {
-    if (uploading.current) return;
+    if (uploading.current || paused.current || !work.current.length) return;
     uploading.current = true;
     try {
     // Discover once per batch: legacy uploads don't need a SHA-256 presign
@@ -103,6 +128,12 @@ export function AdminDashboard() {
     const worker = async () => {
     while (work.current.length && !paused.current) {
       const item = work.current.shift()!;
+      if (findDuplicatePhoto(libraryPhotos.current, item.file.name, item.id)) {
+        releaseName(item);
+        setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "duplicate", progress: 0, duplicateAt: Date.now(), error: undefined, warning: undefined } : x));
+        continue;
+      }
+      reservedNames.current.set(normalizedFilename(item.file.name), item.id);
       setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "uploading" } : x));
       try {
         const direct = config.pipeline !== "legacy" && await uploadDirect(item.file, item.album, item.id, progress => setQueue(q => q.map(x => x.id === item.id ? { ...x, progress } : x)));
@@ -113,6 +144,7 @@ export function AdminDashboard() {
         }
         const prepared = await prepareUpload(item.file, config.images, config.pipeline === "legacy");
         const form = new FormData(); form.append("file", prepared.uploadFile); form.append("album", item.album);
+        form.append("originalFilename", item.file.name);
         form.append("width", String(prepared.width)); form.append("height", String(prepared.height));
         if (prepared.preview) form.append("preview", prepared.preview);
         form.append("uploadId", item.id);
@@ -125,7 +157,11 @@ export function AdminDashboard() {
           } };
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) { try { resolve(JSON.parse(xhr.responseText).warning); } catch { reject(new Error("Phản hồi tải ảnh không hợp lệ.")); } }
-            else { let message = "Không thể tải ảnh."; try { message = JSON.parse(xhr.responseText).error || message; } catch {} reject(new Error(message)); }
+            else {
+              let result: { error?: string; code?: string } = {};
+              try { result = JSON.parse(xhr.responseText); } catch {}
+              reject(result.code === DUPLICATE_UPLOAD_CODE ? new DuplicateUploadError(result.error) : new Error(result.error || "Không thể tải ảnh."));
+            }
           };
           xhr.onerror = () => reject(new Error("Mất kết nối. Hãy thử lại."));
           xhr.ontimeout = () => reject(new Error("Tải ảnh quá lâu. Hãy thử lại."));
@@ -134,13 +170,20 @@ export function AdminDashboard() {
         const localWarning = prepared.optimized ? `Ảnh ${item.file.name} đã được tối ưu WebP chất lượng cao để vượt giới hạn upload của Vercel.` : undefined;
         setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: warning || localWarning } : x));
         scheduleLibraryReload();
-      } catch (e) { setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "failed", error: (e as Error).message } : x)); }
+      } catch (e) {
+        releaseName(item);
+        setQueue(q => q.map(x => x.id === item.id ? e instanceof DuplicateUploadError
+          ? { ...x, status: "duplicate", progress: 0, duplicateAt: Date.now(), error: undefined, warning: undefined }
+          : { ...x, status: "failed", error: (e as Error).message } : x));
+      }
     }
     };
     // Bound memory, bandwidth and concurrent database writers for large batches.
     await Promise.all(Array.from({ length: 4 }, worker));
     } catch (e) {
-      const pending = new Set(work.current.splice(0).map(item => item.id));
+      const items = work.current.splice(0);
+      items.forEach(releaseName);
+      const pending = new Set(items.map(item => item.id));
       setQueue(q => q.map(item => pending.has(item.id) ? { ...item, status: "failed", error: (e as Error).message } : item));
     } finally {
       uploading.current = false;
@@ -150,11 +193,7 @@ export function AdminDashboard() {
   }
   function addFiles(files: FileList | null) {
     if (!files || !ready || !currentUploadAlbum) return;
-    const items: QueueItem[] = Array.from(files).map(file => ({
-      id: crypto.randomUUID(), file, album: currentUploadAlbum, progress: 0,
-      status: !["image/jpeg", "image/png", "image/webp"].includes(file.type) || !file.size || file.size > 50 * 1024 * 1024 ? "failed" : "waiting",
-      error: "Chỉ nhận JPEG, PNG, WebP tối đa 50 MB.",
-    }));
+    const items = createQueueItems(Array.from(files), currentUploadAlbum, data.photos, reservedNames.current);
     work.current.push(...items.filter(x => x.status === "waiting")); setQueue(q => [...q, ...items]); void drainQueue();
   }
   const albumSelect = (value: string, change: (value: string) => void, all = false) => <select aria-label="Album ảnh" value={value} onChange={e => change(e.target.value)}>{all && <option value="">Tất cả album</option>}{data.albums.map(a => <option key={a.slug} value={a.slug}>{a.name}</option>)}</select>;
@@ -209,8 +248,8 @@ export function AdminDashboard() {
           {data.photos.filter(p => (p.pipeline === "r2-v2" || p.pipeline === "r2-direct") && p.status !== "ready" && p.status !== "deleted").map(p => <div className="admin-upload-row" key={p.id}><div><strong>{p.filename}</strong><small>{p.status === "processing" ? "Đang tạo thumbnail và preview" : p.status === "pending" ? "Chờ upload R2 hoàn tất" : "Xử lý thất bại"}</small></div><button disabled={busy} onClick={() => void retryProcessing(p.id)}>Thử lại xử lý</button><button disabled={busy} onClick={() => setConfirm({ text: `Xóa ảnh chưa hoàn tất “${p.filename}” và dọn file liên quan?`, operation: { action: "deletePhotos", ids: [p.id] } })}>Xóa</button></div>)}
           <button className="dropzone" disabled={!ready || !currentUploadAlbum} onClick={() => fileInput.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}><Plus /><strong>Kéo thả hoặc chọn ảnh</strong></button>
           <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
-          <p className="admin-muted">Giữ nguyên ảnh gốc · Tải đồng thời 4 ảnh</p>
-          <div className="queue-summary"><div className="queue-summary-heading"><h3>Hàng đợi</h3><span>{queue.length} ảnh</span></div><div className="queue-counts" role="status"><span><i className="queue-dot done" />{queue.filter(q => q.status === "done").length} xong</span><span><i className="queue-dot uploading" />{queue.filter(q => q.status === "uploading").length} đang tải</span><span><i className="queue-dot waiting" />{queue.filter(q => q.status === "waiting").length} chờ</span><span><i className="queue-dot failed" />{queue.filter(q => q.status === "failed").length} lỗi</span></div><progress aria-label="Tiến độ hàng đợi" max={Math.max(1, queue.length * 100)} value={queue.reduce((total, item) => total + (item.status === "done" ? 100 : item.status === "uploading" ? item.progress : 0), 0)} /></div>
+          <p className="admin-muted">Giữ nguyên ảnh gốc · Tải đồng thời 4 ảnh · Ảnh trùng tên được bỏ qua và tự dọn khỏi hàng đợi sau 5 phút.</p>
+          <div className="queue-summary"><div className="queue-summary-heading"><h3>Hàng đợi</h3><span>{queue.length} ảnh</span></div><div className="queue-counts" role="status"><span><i className="queue-dot done" />{queue.filter(q => q.status === "done").length} xong</span><span><i className="queue-dot uploading" />{queue.filter(q => q.status === "uploading").length} đang tải</span><span><i className="queue-dot waiting" />{queue.filter(q => q.status === "waiting").length} chờ</span><span><i className="queue-dot failed" />{queue.filter(q => q.status === "failed").length} lỗi</span><span className="queue-duplicate-count"><i className="queue-dot duplicate" />{queue.filter(q => q.status === "duplicate").length} Trùng lặp</span></div><progress aria-label="Tiến độ hàng đợi" max={Math.max(1, uploadItems.length * 100)} value={uploadItems.reduce((total, item) => total + (item.status === "done" ? 100 : item.status === "uploading" ? item.progress : 0), 0)} /></div>
           <div className="admin-toolbar queue-actions">
             <button onClick={() => { paused.current = !paused.current; setQueuePaused(paused.current); if (!paused.current) void drainQueue(); }}>{queuePaused ? "Tiếp tục" : "Tạm dừng"}</button>
             <button disabled={!queue.some(q => q.status === "failed")} onClick={() => {
@@ -221,7 +260,8 @@ export function AdminDashboard() {
             }}>Thử lại ảnh lỗi</button>
             <button disabled={queue.some(q => q.status === "waiting" || q.status === "uploading")} onClick={() => setQueue([])}>Dọn danh sách</button></div>
           {!queue.length && <p className="admin-empty">Chưa có ảnh trong hàng đợi.</p>}
-          <div className="upload-queue-list" aria-label="Danh sách tải ảnh">{queue.filter(item => item.status !== "done" || item.warning).slice(0, 100).map(item => <div className="admin-upload-row" key={item.id}><div><strong title={item.file.name}>{item.file.name}</strong><small>{(item.file.size / 1024 / 1024).toFixed(1)} MB · {item.status === "done" ? item.warning || "Đã lưu ảnh gốc" : item.status === "failed" ? item.error : item.status === "uploading" ? item.progress >= 95 ? "Đang lưu / xử lý ảnh…" : `Đang tải ${item.progress}%` : "Đang chờ"}</small><progress aria-label={`Tiến độ ${item.file.name}`} max={100} value={item.progress} /></div>
+          <div className="upload-queue-list" aria-label="Danh sách tải ảnh">{queue.filter(item => item.status !== "done" || item.warning).slice(0, 100).map(item => <div className="admin-upload-row" key={item.id}><div><strong title={item.file.name}>{item.file.name}</strong><small>{(item.file.size / 1024 / 1024).toFixed(1)} MB · {item.status === "duplicate" ? <><span className="queue-duplicate-badge">Trùng lặp</span> · Tự dọn sau 5 phút</> : item.status === "done" ? item.warning || "Đã lưu ảnh gốc" : item.status === "failed" ? item.error : item.status === "uploading" ? item.progress >= 95 ? "Đang lưu / xử lý ảnh…" : `Đang tải ${item.progress}%` : "Đang chờ"}</small>{item.status !== "duplicate" && <progress aria-label={`Tiến độ ${item.file.name}`} max={100} value={item.progress} />}</div>
+            {item.status === "duplicate" && <button aria-label={`Xóa ${item.file.name} trùng lặp khỏi hàng đợi`} onClick={() => setQueue(q => q.filter(x => x.id !== item.id))}>Xóa</button>}
             {(item.status === "failed" || item.status === "done" && item.warning) && <button disabled={!ready} onClick={() => { if (work.current.some(q => q.id === item.id)) return; work.current.push(item); setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "waiting", progress: 0 } : x)); void drainQueue(); }}>Thử lại</button>}</div>)}</div>
           {queue.filter(item => item.status !== "done" || item.warning).length > 100 && <p>Hiển thị 100 ảnh đầu trong hàng đợi; các ảnh còn lại vẫn được tải tự động.</p>}
         </section>}

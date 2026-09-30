@@ -1,4 +1,4 @@
-import { libraryError, libraryOwner, LibraryError, mutateLibrary, readLibrary } from "@/lib/library-server";
+import { libraryError, libraryOwner, LibraryError, mutateLibrary } from "@/lib/library-server";
 import { putOriginal } from "@/lib/original-storage";
 import { uploadPreview } from "@/lib/cloudflare-images";
 import { imagesEnabled } from "@/lib/cloud-config";
@@ -6,6 +6,7 @@ import { MAX_ORIGINAL_SIZE, validImageHeader } from "@/lib/image-upload";
 import type { LibraryPhoto } from "@/lib/library-model";
 import { imagePipelineEnabled } from "@/lib/image-service";
 import { directR2Enabled } from "@/lib/cloud-config";
+import { DUPLICATE_UPLOAD_CODE, findDuplicatePhoto } from "@/lib/upload-duplicates";
 
 export async function POST(request: Request) {
   try {
@@ -14,35 +15,41 @@ export async function POST(request: Request) {
     if (Number(request.headers.get("content-length")) > 61 * 1024 * 1024) throw new LibraryError("Ảnh vượt quá giới hạn tải lên.", 413);
     const form = await request.formData();
     const file = form.get("file"), preview = form.get("preview");
+    const filename = String(form.get("originalFilename") ?? (file instanceof File ? file.name : ""));
     const album = String(form.get("album") ?? "");
     const uploadId = String(form.get("uploadId") ?? crypto.randomUUID());
     const width = Number(form.get("width")), height = Number(form.get("height"));
     if (!/^[a-f0-9-]{36}$/i.test(uploadId)) throw new LibraryError("Mã tải lên không hợp lệ.", 400);
     if (!(file instanceof File) || !["image/jpeg", "image/png", "image/webp"].includes(file.type) || !file.size || file.size > MAX_ORIGINAL_SIZE ||
       !Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > 100000 || height > 100000 ||
-      !file.name || file.name.length > 255) throw new LibraryError("Chỉ hỗ trợ JPEG, PNG, WebP tối đa 50 MB.", 400);
+      !file.name || file.name.length > 255 || !filename.trim() || filename.length > 255) throw new LibraryError("Chỉ hỗ trợ JPEG, PNG, WebP tối đa 50 MB.", 400);
     if (!validImageHeader(new Uint8Array(await file.slice(0, 32).arrayBuffer()), file.type)) throw new LibraryError("Nội dung file không khớp định dạng ảnh.", 400);
     const sha256 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(b => b.toString(16).padStart(2, "0")).join("");
-    const library = await readLibrary(owner);
-    if (!library.albums.some(a => a.slug === album)) throw new LibraryError("Album không tồn tại.", 404);
-    let photo = library.photos.find(p => p.uploadId === uploadId);
-    if (photo && photo.sha256 !== sha256) throw new LibraryError("Mã tải lên đã dùng cho ảnh khác.", 409);
-    if (!photo) {
-      const id = crypto.randomUUID();
-      // Stable object key makes a retried request reuse the original bytes.
-      const key = `${encodeURIComponent(owner)}/${uploadId}-${sha256}`;
-      const storage = await putOriginal(key, file, sha256);
-      const src = `/api/library/photo/${id}`;
-      const record: LibraryPhoto = { id, src, preview: src + "?variant=thumbnail", album, filename: file.name, alt: file.name, width, height,
-        takenAt: new Date().toISOString(), key, storage, size: file.size, sha256, contentType: file.type, uploadId,
+    const id = crypto.randomUUID(), key = `${encodeURIComponent(owner)}/${uploadId}-${sha256}`;
+    const src = `/api/library/photo/${id}`;
+    // Reserve the filename atomically before writing any bytes to storage.
+    // Concurrent tabs cannot both upload a new original with the same name.
+    const reserved = await mutateLibrary(owner, data => {
+      if (!data.albums.some(a => a.slug === album)) throw new LibraryError("Album không tồn tại.", 404);
+      const existing = data.photos.find(p => p.uploadId === uploadId);
+      if (existing) {
+        if (existing.status === "deleted") throw new LibraryError("Ảnh đã bị xóa.", 410);
+        if (existing.sha256 !== sha256 || existing.album !== album || existing.filename !== filename) throw new LibraryError("Mã tải lên đã dùng cho ảnh khác.", 409);
+        return;
+      }
+      if (findDuplicatePhoto(data.photos, filename)) throw new LibraryError("Ảnh trùng tên đã có trong thư viện.", 409, DUPLICATE_UPLOAD_CODE);
+      const record: LibraryPhoto = { id, src, preview: src + "?variant=thumbnail", album, filename, alt: filename, width, height,
+        takenAt: new Date().toISOString(), key, size: file.size, sha256, contentType: file.type, uploadId, status: "pending",
         previewStatus: imagesEnabled() ? "failed" : "disabled" };
-      // Never delete an original after an ambiguous database timeout: the write
-      // may have committed. Retain orphan objects for manual reconciliation.
+      data.photos.push(record);
+    });
+    let photo = reserved.photos.find(p => p.uploadId === uploadId)!;
+    if (photo.status === "pending" || photo.status === "failed") {
+      const storage = await putOriginal(photo.key!, file, sha256);
       const saved = await mutateLibrary(owner, data => {
-        if (!data.albums.some(a => a.slug === album)) throw new LibraryError("Album đã bị xóa.", 409);
-        const duplicate = data.photos.find(p => p.uploadId === uploadId);
-        if (duplicate && duplicate.sha256 !== sha256) throw new LibraryError("Mã tải lên bị trùng.", 409);
-        if (!duplicate) data.photos.push(record);
+        const target = data.photos.find(p => p.uploadId === uploadId);
+        if (!target || target.status === "deleted") throw new LibraryError("Ảnh đã bị xóa.", 410);
+        Object.assign(target, { storage, status: "ready", updatedAt: new Date().toISOString() });
       });
       photo = saved.photos.find(p => p.uploadId === uploadId)!;
     }

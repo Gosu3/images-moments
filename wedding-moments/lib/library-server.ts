@@ -5,7 +5,7 @@ import { libraryProvider } from "./cloud-config";
 import { readSupabaseLibrary, saveSupabaseLibrary } from "./supabase-library";
 
 export class LibraryError extends Error {
-  constructor(message: string, public status = 503) { super(message); }
+  constructor(message: string, public status = 503, public code?: string) { super(message); }
 }
 export async function libraryOwner(request: Request, write = false) {
   if (write && request.headers.get("origin") !== new URL(request.url).origin) throw new LibraryError("Yêu cầu không hợp lệ.", 403);
@@ -66,7 +66,7 @@ export async function mutateLibrary(owner: string, update: (library: Library) =>
   throw new LibraryError("Thư viện đang được cập nhật. Vui lòng thử lại.", 409);
 }
 export function libraryError(error: unknown) {
-  if (error instanceof LibraryError) return Response.json({ error: error.message }, { status: error.status });
+  if (error instanceof LibraryError) return Response.json({ error: error.message, ...(error.code ? { code: error.code } : {}) }, { status: error.status });
   console.error("Library request failed", error);
   if (error instanceof Error && (error.message.includes("Supabase") || error.message.includes("Kho thư viện"))) {
     return Response.json({ error: error.message }, { status: 503 });

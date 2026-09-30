@@ -1,8 +1,12 @@
-type Presign = { mode: "legacy" | "direct"; photoId?: string; ready?: boolean; uploadUrl?: string; headers?: Record<string, string>; error?: string };
+import { DUPLICATE_UPLOAD_CODE, DuplicateUploadError } from "./upload-duplicates";
+type Presign = { mode: "legacy" | "direct"; photoId?: string; ready?: boolean; uploadUrl?: string; headers?: Record<string, string>; error?: string; code?: string };
 async function post(url: string, data: unknown) {
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
   const result = await response.json() as Presign;
-  if (!response.ok) throw new Error(result.error || "Không thể tải ảnh.");
+  if (!response.ok) {
+    if (result.code === DUPLICATE_UPLOAD_CODE) throw new DuplicateUploadError(result.error);
+    throw new Error(result.error || "Không thể tải ảnh.");
+  }
   return result;
 }
 export async function uploadDirect(file: File, album: string, uploadId: string, progress: (value: number) => void) {

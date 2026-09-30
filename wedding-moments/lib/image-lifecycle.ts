@@ -7,6 +7,7 @@ import type { LibraryPhoto } from "./library-model";
 import { directR2Enabled } from "./cloud-config";
 import { headOriginal, removeUncommittedOriginal } from "./original-storage";
 import { galleryVariantKey } from "./gallery-preview";
+import { DUPLICATE_UPLOAD_CODE, findDuplicatePhoto } from "./upload-duplicates";
 
 export const uploadRequest = z.object({ album: z.string().min(1).max(100), filename: z.string().min(1).max(255),
   contentType: z.enum(["image/jpeg", "image/png", "image/webp"]), size: z.number().int().positive().max(50 * 1024 * 1024),
@@ -28,6 +29,7 @@ export async function beginUpload(owner: string, body: unknown) {
       if (photo.status === "deleted") throw new LibraryError("Ảnh đã bị xóa.", 410);
       if (Date.parse(photo.processingUntil || "") > Date.now()) throw new LibraryError("Ảnh đang được xử lý. Hãy thử lại sau.", 409);
     } else {
+      if (findDuplicatePhoto(data.photos, input.filename)) throw new LibraryError("Ảnh trùng tên đã có trong thư viện.", 409, DUPLICATE_UPLOAD_CODE);
       const workerPipeline = imagePipelineEnabled();
       photo = { id, album: input.album, filename: input.filename, alt: input.filename, src: "", preview: "", takenAt: now,
         width: input.width, height: input.height, key: `albums/${namespace}/${id}.${ext}`,
