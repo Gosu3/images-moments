@@ -7,10 +7,13 @@ import { fetchOriginal } from "./fetch-original";
 export async function downloadOriginal(photo: Photo & Partial<LibraryPhoto>): Promise<SaveResult> {
   const filename = photo.filename || `wedding-moment-${photo.id}.jpg`;
   if (!photo.key && !photo.pipeline && !photo.src.startsWith("/api/")) return savePhotoToDevice(photo.src, filename);
+  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  // Fetch the same-origin stream immediately on mobile. Avoid a ticket round
+  // trip followed by a blocked cross-origin request before fetching it again.
+  if (mobile && photo.pipeline !== "r2-v2") return savePhotoToDevice(getOriginalDownloadEndpoint(photo.id), filename);
   const response = await fetch(getOriginalDownloadEndpoint(photo.id), { method: "POST" });
   const result = await response.json() as { url?: string; filename?: string; error?: string };
   if (!response.ok || !result.url) throw new Error(result.error || "Không thể tải ảnh gốc.");
-  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   if (!mobile) {
     const link = document.createElement("a"); link.href = result.url; link.download = result.filename || filename;
     link.rel = "noopener"; document.body.appendChild(link); link.click(); link.remove();

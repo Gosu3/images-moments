@@ -82,8 +82,10 @@ export function AdminDashboard() {
     finally { setBusy(false); }
   }
   async function download(photo: LibraryPhoto) {
+    setNotice("Đang tải ảnh gốc…");
     try {
       const result = await downloadOriginal(photo);
+      setNotice(result === "shared" ? "Đã mở menu lưu ảnh." : "Đã gửi ảnh tới trình duyệt.");
       setHistory(h => [{ name: photo.filename, status: result === "shared" ? "Đã mở menu lưu ảnh" : "Đã gửi tới trình duyệt để tải" }, ...h]);
     } catch (e) {
       if ((e as Error).name !== "AbortError") { setNotice("Không thể tải " + photo.filename); setHistory(h => [{ name: photo.filename, status: "Tải thất bại" }, ...h]); }

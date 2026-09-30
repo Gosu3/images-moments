@@ -111,7 +111,7 @@ export function GalleryExperience({ photos, albumName, albumSlug }: { photos: Ph
         {current&&<>
           <div className="lightbox-top"><span>{active!+1} / {photos.length}</span><div><button onClick={()=>toggleFavorite(current.id)} aria-label="Yêu thích"><Heart fill={favorites.has(current.id)?"currentColor":"none"}/></button><button onClick={share} aria-label="Chia sẻ"><Share2/></button><button onClick={()=>downloadPhoto(current)} aria-label="Tải ảnh về thiết bị"><Download/></button><button onClick={()=>document.documentElement.requestFullscreen?.()} aria-label="Toàn màn hình"><Expand/></button><button onClick={closePhoto} aria-label="Đóng"><X/></button></div></div>
           <button className="lightbox-arrow left" onClick={()=>move(-1)} aria-label="Ảnh trước"><ChevronLeft/></button>
-          <div className="lightbox-stage" style={{ backgroundImage: `url(${getPhotoThumbnailUrl(current)})` }}><img key={current.id} src={getPhotoPreviewUrl(current)} alt={current.alt}/></div>
+          <div className="lightbox-stage"><img key={current.id} src={getPhotoPreviewUrl(current)} alt={current.alt}/></div>
           <button className="slideshow-btn" onClick={() => setPlaying(p => !p)}>{playing ? "Dừng trình chiếu" : "Tiếp tục trình chiếu"}</button>
           <button className="lightbox-arrow right" onClick={()=>move(1)} aria-label="Ảnh sau"><ChevronRight/></button>
           <p className="lightbox-caption">{current.takenAt} · Lễ Thành Hôn</p>

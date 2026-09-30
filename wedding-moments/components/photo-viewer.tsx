@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Minus, Plus, X, Heart, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { Photo } from "@/lib/mock-data";
-import { getPhotoPreviewUrl, getPhotoThumbnailUrl } from "@/lib/photo-urls";
+import { getPhotoPreviewUrl } from "@/lib/photo-urls";
 import { readFavorites, writeFavorites } from "@/lib/favorites";
 import { downloadOriginal } from "@/lib/save-photo";
 
@@ -11,6 +11,7 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
   const [scale, setScale] = useState(1);
   const [favorites, setFavorites] = useState<Set<string>>(readFavorites);
   const [notice, setNotice] = useState("");
+  const [downloading, setDownloading] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const transform = useRef({ scale: 1, x: 0, y: 0 });
   const stage = useRef<HTMLDivElement | null>(null);
@@ -85,14 +86,14 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
       <DialogDescription className="sr-only">Cuộn chuột hoặc chụm hai ngón tay để zoom tại vị trí đang xem. Kéo ảnh để xem chi tiết. Dùng nút cộng, trừ để thay đổi độ phóng đại.</DialogDescription>
       <div className="viewer-toolbar"><span>{index === null ? 0 : index + 1} / {photos.length}</span><div>
         {photo && <><button aria-label="Yêu thích ảnh" aria-pressed={favorites.has(photo.id)} onClick={() => { const next = readFavorites(); if (next.has(photo.id)) next.delete(photo.id); else next.add(photo.id); writeFavorites(next); setFavorites(next); }}><Heart fill={favorites.has(photo.id) ? "currentColor" : "none"} /></button>
-        <button aria-label="Tải ảnh gốc" onClick={async () => { try { await downloadOriginal(photo); } catch (error) { if ((error as Error).name !== "AbortError") setNotice("Chưa thể tải ảnh gốc. Hãy thử lại."); } }}><Download /></button></>}
+        <button aria-label={downloading ? "Đang tải ảnh gốc" : "Tải ảnh gốc"} disabled={downloading} onClick={async () => { setDownloading(true); setNotice("Đang tải ảnh gốc…"); try { await downloadOriginal(photo); setNotice(""); } catch (error) { setNotice((error as Error).name !== "AbortError" ? "Chưa thể tải ảnh gốc. Hãy thử lại." : ""); } finally { setDownloading(false); } }}><Download /></button></>}
         <button aria-label="Thu nhỏ" disabled={scale === 1} onClick={() => zoom(scale - .5)}><Minus /></button>
         <button onClick={reset} aria-label="Vừa màn hình">{Math.round(scale * 100)}%</button>
         <button aria-label="Phóng to" disabled={scale === 4} onClick={() => zoom(scale + .5)}><Plus /></button>
         <button aria-label="Đóng ảnh" onClick={() => { reset(); onIndex(null); }}><X /></button>
       </div></div>
-      {notice && <p role="alert">{notice}</p>}
-      <div ref={attachStage} className="viewer-stage" style={{ touchAction: "none", cursor: scale > 1 ? "grab" : "zoom-in", backgroundImage: photo ? `url(${getPhotoThumbnailUrl(photo)})` : undefined }}
+      {notice && <p className="viewer-notice" role="status">{notice}</p>}
+      <div ref={attachStage} className="viewer-stage" style={{ touchAction: "none", cursor: scale > 1 ? "grab" : "zoom-in" }}
         onDoubleClick={e => zoomAt(transform.current.scale === 1 ? 2 : 1, { x: e.clientX, y: e.clientY })}
         onPointerDown={e => {
           if (e.pointerType === "mouse" && e.button !== 0) return;

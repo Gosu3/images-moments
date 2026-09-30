@@ -11,6 +11,7 @@ export function HomeAlbumTabs() {
   const { data, error, ready } = useLibrary();
   const [tab, setTab] = useState("");
   const [active, setActive] = useState<number | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const selected = data.albums.some(a => a.slug === tab) ? tab : data.albums.find(a => data.photos.some(p => p.album === a.slug && isPhotoReady(p)))?.slug ?? data.albums[0]?.slug ?? "";
   const currentPhotos = data.photos.filter(p => isPhotoReady(p) && p.album === selected);
   return <section id="albums" className="home-albums">
@@ -26,7 +27,7 @@ export function HomeAlbumTabs() {
         <div className="home-photo-grid">
           {data.photos.filter(p => isPhotoReady(p) && p.album === album.slug).map((photo, index) => <article className="home-photo-card" key={photo.id}>
             <button className="home-photo-open" onPointerEnter={() => { const image = new Image(); image.src = getPhotoPreviewUrl(photo); }} onFocus={() => { const image = new Image(); image.src = getPhotoPreviewUrl(photo); }} onClick={() => setActive(index)} aria-label={`Phóng to ${photo.alt}`}><img src={getPhotoThumbnailUrl(photo)} alt={photo.alt} width={photo.width} height={photo.height} loading={index < 12 ? "eager" : "lazy"} decoding="async" fetchPriority={index < 4 ? "high" : "auto"} /></button>
-            <button className="home-photo-download" onClick={async () => { try { await downloadOriginal(photo); } catch (e) { if ((e as Error).name !== "AbortError") alert("Chưa thể tải ảnh. Vui lòng thử lại."); } }} aria-label={`Tải về ${photo.alt}`}><Download size={17} /><span>Tải về</span></button>
+            <button className="home-photo-download" disabled={downloading !== null} aria-busy={downloading === photo.id} onClick={async () => { setDownloading(photo.id); try { await downloadOriginal(photo); } catch (e) { if ((e as Error).name !== "AbortError") alert("Chưa thể tải ảnh. Vui lòng thử lại."); } finally { setDownloading(null); } }} aria-label={downloading === photo.id ? "Đang tải ảnh gốc" : `Tải về ${photo.alt}`}><Download size={17} /><span>{downloading === photo.id ? "Đang tải…" : "Tải về"}</span></button>
           </article>)}
         </div>
         {!data.photos.some(p => p.album === album.slug) && <p className="admin-empty">Album chưa có ảnh.</p>}
