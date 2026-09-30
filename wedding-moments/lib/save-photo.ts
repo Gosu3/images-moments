@@ -9,11 +9,37 @@ const listeners = new Set<() => void>();
 export function subscribeReadyDownload(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
 export function getReadyDownload() { return readyFile; }
 export function clearReadyDownload() { readyFile = null; listeners.forEach(listener => listener()); }
-export async function shareReadyDownload() {
+function downloadBlob(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl; link.download = filename;
+  (document.querySelector('[role="dialog"]') || document.body).appendChild(link);
+  link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+}
+export function downloadReadyDownload(): SaveResult {
+  if (!readyFile) throw new Error("Ảnh chưa sẵn sàng. Hãy tải lại ảnh gốc.");
+  downloadBlob(readyFile, readyFile.name);
+  clearReadyDownload();
+  return "downloaded";
+}
+export async function shareReadyDownload(): Promise<SaveResult> {
   const file = readyFile;
-  if (!file) return;
-  await navigator.share({ files: [file], title: "Lưu ảnh cưới" });
+  if (!file) throw new Error("Ảnh chưa sẵn sàng. Hãy tải lại ảnh gốc.");
+  try {
+    if (typeof navigator.share !== "function" || !navigator.canShare?.({ files: [file] })) return downloadReadyDownload();
+    // Called directly from a fresh tap, before any network or other await.
+    await navigator.share({ files: [file], title: "Lưu ảnh cưới" });
+  } catch (error) {
+    if ((error as Error).name === "AbortError") throw error;
+    // Some browsers expose Web Share but deny it in their current context.
+    // A regular file download must still work instead of retrying forever.
+    downloadBlob(file, file.name);
+    if (readyFile === file) clearReadyDownload();
+    return "downloaded";
+  }
   if (readyFile === file) clearReadyDownload();
+  return "shared";
 }
 
 export async function downloadOriginal(photo: Photo & Partial<LibraryPhoto>): Promise<SaveResult> {
@@ -38,18 +64,13 @@ export async function savePhotoToDevice(url:string,filename:string,photoId?:stri
   const response=photoId ? await fetchOriginal(url,photoId) : await fetch(url);if(!response.ok)throw new Error("Không thể tải ảnh");
   const blob=await response.blob();const safeName=filename.replace(/[\\/\u0000-\u001f\u007f]/g,"-");
   const file=new File([blob],safeName,{type:blob.type||"image/jpeg"});
+  if (!blob.size || !file.type.startsWith("image/")) throw new Error("Phản hồi không chứa ảnh hợp lệ. Hãy tải lại ảnh gốc.");
   const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
   if(isMobile&&typeof navigator.share==="function"&&typeof navigator.canShare==="function"&&navigator.canShare({files:[file]})){
-    try {
-      await navigator.share({files:[file],title:"Lưu ảnh cưới",text:"Chọn “Lưu hình ảnh” để thêm ảnh vào thư viện trên điện thoại."});
-      return "shared";
-    } catch (error) {
-      // Viewing another photo can consume the original user activation while
-      // the file downloads. Retain the exact original for a fresh Save tap.
-      if (!(error instanceof Error) || !["NotAllowedError", "InvalidStateError"].includes(error.name)) throw error;
-      readyFile = file; listeners.forEach(listener => listener());
-      return "ready";
-    }
+    // Preparing the original is asynchronous: always offer a fresh Save tap
+    // rather than attempting Web Share after user activation has expired.
+    readyFile = file; listeners.forEach(listener => listener());
+    return "ready";
   }
-  const objectUrl=URL.createObjectURL(blob);const link=document.createElement("a");link.href=objectUrl;link.download=safeName;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);return "downloaded";
+  downloadBlob(blob, safeName); return "downloaded";
 }
