@@ -128,6 +128,9 @@ footer{background:#4e1e2e;color:#eed8c4}
 .home-nav .favorites-nav-tab{background:linear-gradient(145deg,#fffaf4,#edddd0);border-radius:6px;box-shadow:0 2px 5px #632b3610}
 .admin-sidebar nav button{background:linear-gradient(135deg,#ffffff0d,#ffffff03);box-shadow:inset 0 1px 0 #ffffff08}
 .admin-sidebar nav button.active{background:linear-gradient(135deg,#fff4e7,#e5cbb9);box-shadow:0 4px 10px #32101d35,inset 0 1px 0 #ffffff80}
+.admin-sidebar nav button,.admin-sidebar .admin-logout{min-height:32px;padding:7px 10px;font-size:.7rem;line-height:1.3;gap:7px;border-radius:6px}
+.admin-sidebar nav button svg,.admin-sidebar .admin-logout svg{width:14px;height:14px;flex-shrink:0}
+.admin-sidebar nav{gap:4px}
 .admin-content button:not(.admin-photo-preview):not(.dropzone):not(.admin-album-row){min-height:30px;padding:5px 8px;font-size:.68rem;gap:4px;border-radius:6px}
 .admin-content button:not(.admin-photo-preview):not(.dropzone) svg{width:14px;height:14px}
 .admin-content input:not([type=checkbox]),.admin-content select{min-height:32px;padding:6px 9px;font-size:.75rem;border-radius:6px}
@@ -137,7 +140,7 @@ footer{background:#4e1e2e;color:#eed8c4}
 .queue-summary-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .queue-summary-heading h3{margin:0;font-size:.86rem}.queue-summary-heading>span{font-size:.68rem;color:var(--muted-foreground)}
 .queue-counts{display:flex;flex-wrap:wrap;gap:6px 14px;margin:9px 0;font-size:.68rem;color:#78555f}
-.queue-counts>span{display:flex;align-items:center;gap:5px}.queue-dot{width:6px;height:6px;border-radius:50%;background:#ae9c90}.queue-dot.done{background:#752d40}.queue-dot.uploading{background:#bc8955}.queue-dot.failed{background:#c54852}
+.queue-counts>span{display:flex;align-items:center;gap:5px}.queue-dot{width:6px;height:6px;border-radius:50%;background:#ae9c90}.queue-dot.done{background:#218647}.queue-dot.uploading{background:#bc8955}.queue-dot.failed{background:#c54852}
 .queue-summary progress{display:block;width:100%;height:5px;accent-color:var(--primary)}
 .queue-actions{justify-content:flex-end}.admin-upload-row{padding:9px 0}.admin-upload-row strong{font-size:.76rem;font-weight:500}.admin-upload-row small{font-size:.66rem;margin:4px 0}.admin-upload-row progress{height:4px}
 .home-photo-open,.photo-open,.photo-card,.admin-photo-preview{cursor:pointer}
@@ -238,6 +241,7 @@ footer{background:#4e1e2e;color:#eed8c4}
 .admin-content .admin-upload-panel .dropzone{min-height:68px;flex-direction:row;gap:8px;padding:10px}
 .admin-upload-panel .dropzone strong{font:500 .8rem/1.4 "Segoe UI",Arial,sans-serif}
 .admin-upload-panel .dropzone>svg{width:18px;height:18px}
+.admin-upload-panel .admin-toolbar>span,.admin-upload-panel>p.admin-muted{font-size:.72rem;line-height:1.45}
 .admin-upload-panel .queue-summary{margin-top:12px;padding:9px 12px}
 .admin-upload-panel .queue-counts{margin:6px 0}
 .admin-upload-panel .queue-actions{margin:6px 0;padding:0}
