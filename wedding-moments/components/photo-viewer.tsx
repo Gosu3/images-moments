@@ -14,6 +14,7 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
   const [notice, setNotice] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragDown, setDragDown] = useState(0);
   const transform = useRef({ scale: 1, x: 0, y: 0 });
   const stage = useRef<HTMLDivElement | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -68,7 +69,8 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
     next.src = getPhotoPreviewUrl(photos[(index + 1) % photos.length]);
     return () => { next.src = ""; };
   }, [index, photos]);
-  const reset = () => { apply({ scale: 1, x: 0, y: 0 }); pointers.current.clear(); swipe.current = null; };
+  const reset = () => { apply({ scale: 1, x: 0, y: 0 }); setDragDown(0); pointers.current.clear(); swipe.current = null; };
+  const close = () => { reset(); onIndex(null); };
   const move = (delta: number) => { if (index !== null) { reset(); onIndex((index + delta + photos.length) % photos.length); } };
   useEffect(() => {
     if (index === null) return;
@@ -82,18 +84,18 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
     return () => window.removeEventListener("keydown", handle);
   }, [index, onIndex, photos.length, apply]);
   const zoom = (value: number) => zoomAt(value);
-  return <Dialog open={photo !== null && photo !== undefined} onOpenChange={open => { if (!open) { reset(); onIndex(null); } }}>
+  return <Dialog open={photo !== null && photo !== undefined} onOpenChange={open => { if (!open) close(); }}>
     <DialogContent className="photo-viewer" showCloseButton={false}>
       <ReadyDownload inViewer />
       <DialogTitle className="sr-only">Phóng to ảnh</DialogTitle>
-      <DialogDescription className="sr-only">Cuộn chuột hoặc chụm hai ngón tay để zoom tại vị trí đang xem. Kéo ảnh để xem chi tiết. Dùng nút cộng, trừ để thay đổi độ phóng đại.</DialogDescription>
+      <DialogDescription className="sr-only">Cuộn chuột hoặc chụm hai ngón tay để zoom tại vị trí đang xem. Kéo ảnh để xem chi tiết. Khi ảnh chưa phóng to, vuốt ngang để chuyển ảnh hoặc kéo xuống để quay lại album.</DialogDescription>
       <div className="viewer-toolbar"><span>{index === null ? 0 : index + 1} / {photos.length}</span><div>
         {photo && <><button aria-label="Yêu thích ảnh" aria-pressed={favorites.has(photo.id)} onClick={() => { const next = readFavorites(); if (next.has(photo.id)) next.delete(photo.id); else next.add(photo.id); writeFavorites(next); setFavorites(next); }}><Heart fill={favorites.has(photo.id) ? "currentColor" : "none"} /></button>
         <button aria-label={downloading ? "Đang tải ảnh gốc" : "Tải ảnh gốc"} disabled={downloading} onClick={async () => { setDownloading(true); setNotice("Đang tải ảnh gốc…"); try { await downloadOriginal(photo); setNotice(""); } catch (error) { setNotice((error as Error).name !== "AbortError" ? "Chưa thể tải ảnh gốc. Hãy thử lại." : ""); } finally { setDownloading(false); } }}><Download /></button></>}
         <button aria-label="Thu nhỏ" disabled={scale === 1} onClick={() => zoom(scale - .5)}><Minus /></button>
         <button onClick={reset} aria-label="Vừa màn hình">{Math.round(scale * 100)}%</button>
         <button aria-label="Phóng to" disabled={scale === 4} onClick={() => zoom(scale + .5)}><Plus /></button>
-        <button aria-label="Đóng ảnh" onClick={() => { reset(); onIndex(null); }}><X /></button>
+        <button aria-label="Đóng ảnh" onClick={close}><X /></button>
       </div></div>
       {notice && <p className="viewer-notice" role="status">{notice}</p>}
       <div ref={attachStage} className="viewer-stage" style={{ touchAction: "none", cursor: scale > 1 ? "grab" : "zoom-in" }}
@@ -102,6 +104,7 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
           if (e.pointerType === "mouse" && e.button !== 0) return;
           pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
           swipe.current = pointers.current.size === 1 && transform.current.scale === 1 ? { x: e.clientX, y: e.clientY } : null;
+          setDragDown(0);
           e.currentTarget.setPointerCapture(e.pointerId);
         }}
         onPointerMove={e => {
@@ -112,25 +115,32 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
           const after = [...pointers.current.values()];
           if (before.length >= 2) {
             swipe.current = null;
+            setDragDown(0);
             const distance = (p: typeof before) => Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y);
             const center = (p: typeof before) => ({ x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 });
             if (distance(before) > 0) zoomAt(transform.current.scale * distance(after) / distance(before), center(before), center(after));
           } else if (transform.current.scale > 1) {
             swipe.current = null;
+            setDragDown(0);
             apply({ ...transform.current, x: transform.current.x + e.clientX - previous.x, y: transform.current.y + e.clientY - previous.y });
+          } else if (swipe.current && e.pointerType === "touch") {
+            const dx = e.clientX - swipe.current.x, dy = e.clientY - swipe.current.y;
+            setDragDown(dy > Math.abs(dx) * 1.25 ? Math.max(0, dy) : 0);
           }
         }}
         onPointerUp={e => {
           pointers.current.delete(e.pointerId);
           if (swipe.current && transform.current.scale === 1 && e.pointerType === "touch") {
             const dx = e.clientX - swipe.current.x, dy = e.clientY - swipe.current.y;
-            if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) move(dx < 0 ? 1 : -1);
+            if (dy > 100 && dy > Math.abs(dx) * 1.25) close();
+            else if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) move(dx < 0 ? 1 : -1);
           }
           swipe.current = null;
+          setDragDown(0);
         }}
-        onPointerCancel={e => { pointers.current.delete(e.pointerId); swipe.current = null; }}
-        onLostPointerCapture={e => { pointers.current.delete(e.pointerId); swipe.current = null; }}>
-        {photo && <img key={photo.id} src={getPhotoPreviewUrl(photo)} alt={photo.alt} draggable={false} onLoad={() => apply({ ...transform.current })} style={{ transition: "none", transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }} />}
+        onPointerCancel={e => { pointers.current.delete(e.pointerId); swipe.current = null; setDragDown(0); }}
+        onLostPointerCapture={e => { pointers.current.delete(e.pointerId); swipe.current = null; setDragDown(0); }}>
+        {photo && <img key={photo.id} src={getPhotoPreviewUrl(photo)} alt={photo.alt} draggable={false} onLoad={() => apply({ ...transform.current })} style={{ transition: "none", transform: `translate(${offset.x}px, ${offset.y + dragDown}px) scale(${scale})` }} />}
       </div>
       {photos.length > 1 && <><button className="viewer-prev" aria-label="Ảnh trước" onClick={() => move(-1)}><ChevronLeft /></button><button className="viewer-next" aria-label="Ảnh tiếp theo" onClick={() => move(1)}><ChevronRight /></button></>}
     </DialogContent>

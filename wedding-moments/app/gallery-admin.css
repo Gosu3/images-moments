@@ -214,9 +214,9 @@ footer{background:#4e1e2e;color:#eed8c4}
   .viewer-toolbar>div{width:auto;gap:3px;justify-content:flex-end}
   .viewer-toolbar button{min-width:29px;height:30px;font-size:.62rem;padding:3px}
   .viewer-toolbar svg{width:15px;height:15px}
-  .viewer-stage{top:46px;padding:6px 6px 44px}
-  .viewer-prev,.viewer-next{min-width:30px;height:30px;bottom:6px}
-  .viewer-prev{left:calc(50% - 36px)}.viewer-next{right:calc(50% - 36px)}
+  .viewer-stage{top:46px;padding:6px 6px calc(64px + env(safe-area-inset-bottom))}
+  .viewer-prev,.viewer-next{width:44px;min-width:44px;height:44px;bottom:calc(8px + env(safe-area-inset-bottom));touch-action:manipulation}
+  .viewer-prev{left:calc(50% - 66px)}.viewer-next{right:calc(50% - 66px)}
   .home-nav{min-height:52px;height:52px;padding:6px 10px}
   .home-nav nav>a,.home-nav .admin-nav-tab{height:36px;padding:0 10px;font-size:.7rem}
   .home-nav .favorites-nav-tab span{display:inline}
