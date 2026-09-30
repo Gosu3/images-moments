@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, Expand, Heart, ImageDown, Play, QrCode, Share2, X } from "lucide-react";
 import type { Photo } from "@/lib/mock-data";
-import { downloadOriginal } from "@/lib/save-photo";
+import { downloadOriginal, preparePreviewDownload } from "@/lib/save-photo";
 import { readFavorites, writeFavorites } from "@/lib/favorites";
 import { downloadZip } from "@/lib/download-zip";
 import { getPhotoThumbnailUrl, getPhotoPreviewUrl } from "@/lib/photo-urls";
@@ -75,6 +75,7 @@ export function GalleryExperience({ photos, albumName, albumSlug }: { photos: Ph
   },[active,move]);
 
   const current = active === null ? null : photos[active];
+  useEffect(() => { if (current) void preparePreviewDownload(current).catch(() => undefined); }, [current]);
   const selectionLabel = useMemo(()=>`${selected.size} ảnh đã chọn`,[selected.size]);
   const share = async () => {
     const url=current?`${location.origin}${location.pathname}?photo=${current.id}`:location.href;

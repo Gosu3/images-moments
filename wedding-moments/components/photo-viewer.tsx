@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import type { Photo } from "@/lib/mock-data";
 import { getPhotoPreviewUrl } from "@/lib/photo-urls";
 import { readFavorites, writeFavorites } from "@/lib/favorites";
-import { downloadOriginal } from "@/lib/save-photo";
+import { downloadOriginal, preparePreviewDownload } from "@/lib/save-photo";
 import { ReadyDownload } from "@/components/ready-download";
 
 export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index: number | null; onIndex: (index: number | null) => void }) {
@@ -61,6 +61,7 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
     return () => { el.removeEventListener("wheel", wheel); resize.disconnect(); pointers.current.clear(); swipe.current = null; stage.current = null; };
   }, [apply, zoomAt]);
   const photo = index === null ? null : photos[index];
+  useEffect(() => { if (photo) void preparePreviewDownload(photo).catch(() => undefined); }, [photo]);
   useEffect(() => {
     if (index === null || photos.length < 2) return;
     const next = new Image();

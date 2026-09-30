@@ -1,7 +1,7 @@
 "use client";
 import { useState, useSyncExternalStore } from "react";
 import { Download, X } from "lucide-react";
-import { clearReadyDownload, downloadReadyDownload, getReadyDownload, shareReadyDownload, subscribeReadyDownload } from "@/lib/save-photo";
+import { clearReadyDownload, getReadyDownload, shareReadyDownload, subscribeReadyDownload } from "@/lib/save-photo";
 
 export function ReadyDownload({ inViewer = false }: { inViewer?: boolean }) {
   const file = useSyncExternalStore(subscribeReadyDownload, getReadyDownload, () => null);
@@ -13,10 +13,9 @@ export function ReadyDownload({ inViewer = false }: { inViewer?: boolean }) {
     <button type="button" disabled={busy} onClick={async () => {
       setBusy(true); setError("");
       try { await shareReadyDownload(); } catch (cause) {
-        if ((cause as Error).name !== "AbortError") setError("Không mở được menu lưu. Chọn Tải file.");
+        if ((cause as Error).name !== "AbortError") setError("Trình duyệt chưa cho phép chia sẻ ảnh. Hãy mở bằng Safari hoặc Chrome.");
       } finally { setBusy(false); }
     }}><Download size={14} />Lưu ảnh</button>
-    <button type="button" disabled={busy} onClick={() => { try { downloadReadyDownload(); } catch (cause) { setError((cause as Error).message); } }}>Tải file</button>
     <button type="button" aria-label="Bỏ ảnh đã chuẩn bị" onClick={clearReadyDownload}><X size={14} /></button>
   </div>;
 }
