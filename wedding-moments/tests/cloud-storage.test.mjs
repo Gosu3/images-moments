@@ -27,6 +27,13 @@ test('R2 signing restricts host, key, method and content type; signature indepen
   assert.equal(signature, createHmac('sha256', key).update(['AWS4-HMAC-SHA256', timestamp, scope, digest].join('\n')).digest('hex'));
 });
 
+test('public QR URL never falls back to localhost in production', async () => {
+  const { resolvePublicAppUrl } = await load('app-url');
+  assert.equal(resolvePublicAppUrl({ NODE_ENV: 'production', APP_URL: 'http://localhost:5173', VERCEL_PROJECT_PRODUCTION_URL: 'images-moments.vercel.app' }), 'https://images-moments.vercel.app');
+  assert.equal(resolvePublicAppUrl({ NODE_ENV: 'production', APP_URL: 'https://photos.example.com/' }), 'https://photos.example.com');
+  assert.equal(resolvePublicAppUrl({ NODE_ENV: 'development' }), 'http://localhost:5173');
+});
+
 test('Supabase reads scoped metadata and uses server-only secret; CAS conflict is false', async t => {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, init) => {

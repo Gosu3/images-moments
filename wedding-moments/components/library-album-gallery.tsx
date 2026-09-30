@@ -11,5 +11,5 @@ export function LibraryAlbumGallery({ slug }: { slug: string }) {
   const album = data.albums.find(a => a.slug === slug);
   if (!album) return <p className="admin-empty">Album không tồn tại. <Link href="/">Về trang chủ</Link></p>;
   const photos = data.photos.filter(p => p.album === slug && isPhotoReady(p));
-  return <><GalleryExperience photos={photos} albumName={album.name} />{!photos.length && <p className="admin-empty">Album chưa có ảnh.</p>}</>;
+  return <><GalleryExperience photos={photos} albumName={album.name} albumSlug={album.slug} />{!photos.length && <p className="admin-empty">Album chưa có ảnh.</p>}</>;
 }

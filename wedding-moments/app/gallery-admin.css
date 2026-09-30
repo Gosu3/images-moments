@@ -1,6 +1,4 @@
 /* Uniform square thumbnails; full-screen viewing preserves original proportions. */
-.wedding-overview{grid-template-columns:repeat(2,minmax(0,1fr))}
-@media(max-width:700px){.wedding-overview{grid-template-columns:1fr}}
 .home-photo-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
 .home-photo-card,.home-photo-card:nth-child(n){aspect-ratio:1/1;margin:0;min-width:0;width:100%;display:block}
 .home-photo-open{height:100%}.home-photo-open img{display:block;height:100%;width:100%;object-fit:cover;transform:none!important;filter:none!important}

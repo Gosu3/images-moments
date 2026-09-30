@@ -14,9 +14,8 @@ export function HomeAlbumTabs() {
   const selected = data.albums.some(a => a.slug === tab) ? tab : data.albums.find(a => data.photos.some(p => p.album === a.slug && isPhotoReady(p)))?.slug ?? data.albums[0]?.slug ?? "";
   const currentPhotos = data.photos.filter(p => isPhotoReady(p) && p.album === selected);
   return <section id="albums" className="home-albums">
-    <div className="home-albums-heading"><p className="eyebrow ink">Thư viện ảnh</p><h2>{data.settings.title}</h2></div>
+    <div className="home-albums-heading"><p>Thư viện ảnh</p><h1>{data.settings.title}</h1></div>
     {error && <p role="status">{ready ? "Kết nối gián đoạn. Ảnh mới sẽ tự cập nhật khi kết nối trở lại." : error}</p>}
-    {ready && <p className="admin-muted">Ảnh mới tự cập nhật · Chạm vào ảnh để xem rõ hơn</p>}
     {!ready && !error && <p>Đang tải thư viện…</p>}
     <Tabs value={selected} onValueChange={value => { setTab(value); setActive(null); }} className="album-tabs">
       <TabsList variant="line" className="album-tabs-list" aria-label="Chọn album">
