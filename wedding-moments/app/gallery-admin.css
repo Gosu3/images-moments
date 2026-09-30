@@ -5,6 +5,7 @@
 .couple-logo::after{inset:2px -1px -1px 2px;border-width:.7px;border-color:#b76070;border-radius:52% 48% 53% 47%;transform:rotate(17deg);opacity:.85}
 .couple-logo b{position:relative;z-index:1;display:block;margin:0;padding:0;font-size:15px;font-weight:600;font-style:normal;line-height:1.02;letter-spacing:0;white-space:nowrap;transform:rotate(-5deg)}
 .couple-logo i{position:absolute;z-index:0;inset:0;display:grid;place-items:center;font-size:36px;font-weight:600;font-style:normal;line-height:1;opacity:.12;transform:rotate(-12deg)}
+.gallery-header .couple-name,.couple-name,.qr-card .couple-name{font-family:"Couple Script",Georgia,serif;font-size:1.4rem;font-weight:600;letter-spacing:0;text-transform:none;line-height:1.4;color:var(--primary)}
 .home-photo-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
 .home-photo-card,.home-photo-card:nth-child(n){aspect-ratio:1/1;margin:0;min-width:0;width:100%;display:block}
 .home-photo-open{height:100%}.home-photo-open img{display:block;height:100%;width:100%;object-fit:cover;transform:none!important;filter:none!important}
@@ -219,3 +220,39 @@ footer{background:#4e1e2e;color:#eed8c4}
   .home-albums{padding-top:10px;scroll-margin-top:60px}
   .home-albums-heading h1{font-size:1rem}.home-albums-heading p{font-size:.56rem}
 }
+
+/* Dense admin thumbnails and a compact upload workspace. */
+.admin-album-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.admin-album-grid .admin-panel{padding:10px}
+.admin-album-grid img{height:100px}
+.admin-album-grid h3{font-size:.85rem;margin:8px 0 4px}
+.admin-album-grid p{font-size:.68rem;margin:4px 0}
+.admin-album-grid .admin-toolbar{margin:5px 0 0;padding:0;gap:5px}
+.admin-photo-grid{grid-template-columns:repeat(8,minmax(0,1fr));gap:7px}
+.admin-photo-preview img{aspect-ratio:1;object-fit:cover}
+.admin-photo-grid article>div{padding:3px;gap:3px;flex-wrap:wrap}
+.admin-photo-grid article>div>span{font-size:.6rem;flex-basis:calc(100% - 22px)}
+.admin-photo-grid input[type=checkbox]{width:14px;height:14px;margin:0}
+.admin-photo-grid article>div>button{margin-left:auto}
+.admin-upload-panel{padding:16px}
+.admin-content .admin-upload-panel .dropzone{min-height:68px;flex-direction:row;gap:8px;padding:10px}
+.admin-upload-panel .dropzone strong{font:500 .8rem/1.4 "Segoe UI",Arial,sans-serif}
+.admin-upload-panel .dropzone>svg{width:18px;height:18px}
+.admin-upload-panel .queue-summary{margin-top:12px;padding:9px 12px}
+.admin-upload-panel .queue-counts{margin:6px 0}
+.admin-upload-panel .queue-actions{margin:6px 0;padding:0}
+.upload-queue-list{max-height:460px;overflow:auto;scrollbar-width:thin;scrollbar-color:#bb8b97 transparent}
+.upload-queue-list .admin-upload-row{flex-wrap:nowrap;padding:6px 2px;gap:8px}
+.upload-queue-list .admin-upload-row>div{flex-basis:auto}
+.upload-queue-list strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.7rem;line-height:1.3}
+.upload-queue-list small{font-size:.62rem;line-height:1.35;overflow-wrap:anywhere;margin:2px 0}
+.upload-queue-list progress{display:block;height:3px}
+@media(max-width:1100px){.admin-photo-grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media(max-width:700px){
+  .admin-album-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .admin-album-grid .admin-panel{padding:8px}.admin-album-grid img{height:80px}
+  .admin-photo-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+  .admin-upload-panel{padding:10px}.upload-queue-list{max-height:45dvh}
+  .admin-content .admin-upload-panel .dropzone{min-height:58px}
+}
+@media(max-width:359px){.admin-photo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}

@@ -11,9 +11,9 @@ export default async function QrPage({ params }: { params: Promise<{ scope: stri
   return <main className="qr-page">
     <Link href={path} className="round-control" aria-label="Quay lại thư viện"><ArrowLeft /></Link>
     <section>
-      <p className="eyebrow ink">Văn Thọ &amp; Hồng Thắm · Chia sẻ</p>
+      <p className="couple-name">Văn Thọ &amp; Hồng Thắm</p>
       <h1>Mang khoảnh khắc<br /><em>đến gần mọi người.</em></h1>
-      <div className="qr-card"><img src={qrUrl} alt="Mã QR mở thư viện ảnh cưới Văn Thọ và Hồng Thắm" /><p>VĂN THỌ &amp; HỒNG THẮM</p><small>Quét để mở {isAlbum ? "album" : "thư viện"}</small></div>
+      <div className="qr-card"><img src={qrUrl} alt="Mã QR mở thư viện ảnh cưới Văn Thọ và Hồng Thắm" /><p className="couple-name">Văn Thọ &amp; Hồng Thắm</p><small>Quét để mở {isAlbum ? "album" : "thư viện"}</small></div>
       <a className="qr-download" href={qrUrl} download="wedding-moments-qr.svg"><Download />Tải mã QR</a>
     </section>
   </main>;
