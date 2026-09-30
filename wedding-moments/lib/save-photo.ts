@@ -1,9 +1,14 @@
-export type SaveResult = "shared" | "downloaded";
+export type SaveResult = "shared" | "downloaded" | "ready";
 import type { Photo } from "./mock-data";
 import type { LibraryPhoto } from "./library-model";
 import { getOriginalDownloadEndpoint } from "./photo-urls";
 import { fetchOriginal } from "./fetch-original";
 
+let readyFile: File | null = null;
+const listeners = new Set<() => void>();
+export function subscribeReadyDownload(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
+export function getReadyDownload() { return readyFile; }
+export function clearReadyDownload() { readyFile = null; listeners.forEach(listener => listener()); }
 function downloadBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -12,6 +17,14 @@ function downloadBlob(blob: Blob, filename: string) {
   link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
 }
+export async function shareReadyDownload(): Promise<SaveResult> {
+  const file = readyFile;
+  if (!file) throw new Error("Ảnh chưa sẵn sàng. Hãy tải lại ảnh gốc.");
+  await navigator.share({ files: [file], title: "Lưu ảnh cưới" });
+  if (readyFile === file) clearReadyDownload();
+  return "shared";
+}
+
 const prepared = new Map<string, { file?: File; promise: Promise<File> }>();
 function mobileDevice() { return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
 async function fetchImageFile(url: string, filename: string, photoId?: string) {
@@ -22,19 +35,13 @@ async function fetchImageFile(url: string, filename: string, photoId?: string) {
   return new File([blob], filename.replace(/[\\/\u0000-\u001f\u007f]/g, "-"), { type: blob.type });
 }
 export function preparePreviewDownload(photo: Photo & Partial<LibraryPhoto>) {
-  if (!mobileDevice()) return Promise.resolve(null);
+  if (!mobileDevice() || photo.pipeline === "r2-v2") return Promise.resolve(null);
   const existing = prepared.get(photo.id);
   if (existing) return existing.promise;
   // Only keep the current and previous original, not an entire album.
   while (prepared.size >= 2) prepared.delete(prepared.keys().next().value!);
   const url = !photo.key && !photo.pipeline && !photo.src.startsWith("/api/") ? photo.src : getOriginalDownloadEndpoint(photo.id);
-  const filename = photo.filename || `wedding-moment-${photo.id}.jpg`;
-  const promise = photo.pipeline === "r2-v2" ? fetch(getOriginalDownloadEndpoint(photo.id), { method: "POST" }).then(async response => {
-    const result = await response.json() as { url?: string; filename?: string; error?: string };
-    if (!response.ok || !result.url) throw new Error(result.error || "Không thể tải ảnh gốc.");
-    return fetchImageFile(result.url, result.filename || filename, photo.id);
-  }) : fetchImageFile(url, filename);
-  const entry: { file?: File; promise: Promise<File> } = { promise };
+  const entry: { file?: File; promise: Promise<File> } = { promise: fetchImageFile(url, photo.filename || `wedding-moment-${photo.id}.jpg`) };
   prepared.set(photo.id, entry);
   entry.promise.then(file => { entry.file = file; }, () => { if (prepared.get(photo.id) === entry) prepared.delete(photo.id); });
   return entry.promise;
@@ -44,9 +51,7 @@ async function shareFile(file: File): Promise<SaveResult> {
     try { await navigator.share({ files: [file], title: "Lưu ảnh cưới" }); return "shared"; }
     catch (error) {
       if (!["NotAllowedError", "InvalidStateError"].includes((error as Error).name)) throw error;
-      // Fetching an original can outlive transient activation, especially when
-      // the visitor opens another photo. Never park it behind a second Save tap.
-      // A cancelled native sheet (AbortError) still propagates without downloading.
+      readyFile = file; listeners.forEach(listener => listener()); return "ready";
     }
   }
   downloadBlob(file, file.name); return "downloaded";
