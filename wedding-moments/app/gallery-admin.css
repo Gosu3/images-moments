@@ -226,13 +226,14 @@ footer{background:#4e1e2e;color:#eed8c4}
 
 /* Dense admin thumbnails and a compact upload workspace. */
 .viewer-notice{position:absolute;top:52px;left:50%;transform:translateX(-50%);z-index:4;margin:0;padding:5px 10px;border-radius:5px;background:#512938;color:#fff4e8;font-size:.7rem}
-.home-photo-download[aria-busy=true] svg{animation:download-arrow 1.2s ease-in-out infinite}
+.download-arrow-loading{animation:download-arrow 1.2s ease-in-out infinite}
 @keyframes download-arrow{0%,100%{transform:translateY(-1px);opacity:.8}50%{transform:translateY(2px);opacity:1}}
 .ready-download{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:100;display:flex;align-items:center;gap:8px;width:max-content;max-width:calc(100vw - 24px);padding:8px 10px;background:#752d40;color:#fff8ee;border:1px solid #c3a17d;border-radius:8px;box-shadow:0 4px 20px #25181d30;font-size:.72rem}
 .ready-download>span{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ready-download button{display:flex;align-items:center;gap:4px;white-space:nowrap;border:0;border-radius:4px;background:#fff5e9;color:#752d40;padding:6px 8px;cursor:pointer}
 body:has([role=dialog]) .ready-download.outside-viewer{display:none}
-.home-photo-download:disabled{cursor:wait;opacity:.75}
+.home-photo-download:disabled{cursor:default;opacity:1}
+.home-photo-download[aria-busy=true]{cursor:wait;opacity:.75}
 .admin-album-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
 .admin-album-grid .admin-panel{padding:10px}
 .admin-album-grid img{height:100px}
@@ -268,3 +269,20 @@ body:has([role=dialog]) .ready-download.outside-viewer{display:none}
   .admin-content .admin-upload-panel .dropzone{min-height:58px}
 }
 @media(max-width:359px){.admin-photo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* Favorites/album pages share the dashboard's dense square thumbnail layout. */
+.gallery-photo-grid{padding:0 clamp(5px,3vw,44px) 24px;max-width:1500px;margin-inline:auto}
+.gallery-photo-grid .photo-card{aspect-ratio:1;contain-intrinsic-size:auto 160px;cursor:pointer;border-radius:5px}
+.gallery-photo-grid .photo-open{cursor:pointer}
+.gallery-photo-grid .photo-card img{display:block;transform:none;filter:none}
+.gallery-photo-grid .photo-download{opacity:1;min-height:26px;padding:5px 7px;gap:4px;font-size:.62rem;right:3px;bottom:3px}
+.gallery-photo-grid .photo-download svg{width:14px;height:14px}
+/* Cancel the dialog's translate utilities, and fit images inside the usable viewport. */
+.lightbox{translate:none!important;height:100dvh!important;max-height:none!important;overflow:hidden}
+.lightbox-stage{position:absolute;inset:48px 0 64px;width:auto;height:auto;min-width:0;min-height:0;padding:8px 52px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.lightbox-stage img{display:block;width:100%;height:100%;max-width:100%;max-height:100%;min-width:0;min-height:0;object-fit:contain;animation:none}
+.lightbox-play{position:absolute;z-index:5;bottom:28px;left:50%;transform:translateX(-50%);margin:0;padding:6px 10px;border:1px solid #ffffff40;border-radius:5px;background:#512938;color:#fff8ee;font-size:.62rem;white-space:nowrap}
+.lightbox-caption{bottom:6px;margin:0;font-size:.6rem}
+.lightbox-status{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:.75rem}
+@media(max-width:760px){.lightbox-stage{inset:48px 0 calc(64px + env(safe-area-inset-bottom));padding:6px}.lightbox-play{bottom:calc(28px + env(safe-area-inset-bottom))}.lightbox-caption{bottom:calc(6px + env(safe-area-inset-bottom))}}
+@media(prefers-reduced-motion:reduce){.download-arrow-loading{animation:none}}

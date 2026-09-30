@@ -3,3 +3,16 @@
 .form input { border: 1px solid var(--border); padding: 14px; letter-spacing: normal; background: #fff; }
 .form button { min-height: 48px; padding: 0 20px; }
 .form [role="alert"] { margin: 0; color: #a13f39; }
+.page { grid-template-columns: 1fr; place-items: center; padding: 24px 16px; min-height: 100dvh; }
+.page .panel { width: 100%; max-width: 420px; min-height: auto; padding: 28px 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
+.page .title { font: 600 clamp(1.3rem, 4vw, 1.65rem)/1.4 "Segoe UI", Arial, sans-serif; letter-spacing: normal; margin: 10px 0; }
+.page .panel > p { font-size: .8rem; line-height: 1.6; margin: 4px 0; }
+.page .panel > p:first-child { font-size: 1.45rem; }
+.page .form { margin-top: 20px; gap: 8px; }
+.form label { font-size: .7rem; letter-spacing: .04em; margin-bottom: 0; }
+.form .passwordField { display: flex; min-width: 0; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: #fff; }
+.form .passwordInput { min-width: 0; width: 100%; border: 0; padding: 10px 12px; font-size: 16px; letter-spacing: normal; background: transparent; }
+.form .passwordField:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
+.form .passwordToggle { flex: 0 0 42px; min-height: 42px; height: auto; padding: 0; display: grid; place-items: center; background: transparent; color: var(--primary); }
+.form .passwordToggle svg { color: currentColor; }
+.form .submit { margin-top: 8px; min-height: 40px; padding: 10px 14px; border-radius: 7px; font-size: .8rem; }
