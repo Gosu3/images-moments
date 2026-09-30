@@ -85,7 +85,7 @@ export function GalleryExperience({ photos, albumName, albumSlug }: { photos: Ph
   return <>
     <header className="gallery-header">
       <Link href="/" className="round-control" aria-label="Về trang chủ"><ArrowLeft size={19}/></Link>
-      <div><p>MINH ANH &amp; HOÀNG NAM</p><h1>{albumName}</h1></div>
+      <div><p>VĂN THỌ &amp; HỒNG THẮM</p><h1>{albumName}</h1></div>
       <div className="gallery-actions">
         <button onClick={()=>setSelectMode(v=>!v)} className={selectMode?"text-control active":"text-control"}>{selectMode?<><X size={17}/>Thoát</>:<><Check size={17}/>Chọn ảnh</>}</button>
         <button className="round-control" onClick={share} aria-label="Chia sẻ album"><Share2 size={18}/></button>

@@ -15,7 +15,7 @@ export function AdminLogin() {
     window.location.assign("/admin");
   }
   return <main className="access-page"><section>
-    <p className="eyebrow">WEDDING MOMENTS</p><h1>Đăng nhập quản trị</h1>
+    <p className="eyebrow">VĂN THỌ &amp; HỒNG THẮM</p><h1>Đăng nhập quản trị</h1>
     <p>Nhập mật khẩu quản trị để tải và quản lý ảnh.</p>
     <form className={styles.form} onSubmit={submit}>
       <label>Mật khẩu<input name="password" type="password" minLength={12} required autoComplete="current-password" autoFocus /></label>

@@ -157,7 +157,7 @@ export function AdminDashboard() {
   }
   const albumSelect = (value: string, change: (value: string) => void, all = false) => <select aria-label="Album ảnh" value={value} onChange={e => change(e.target.value)}>{all && <option value="">Tất cả album</option>}{data.albums.map(a => <option key={a.slug} value={a.slug}>{a.name}</option>)}</select>;
   return <div className="admin-shell">
-    <aside className="admin-sidebar"><Link className="admin-brand" href="/"><span>WM</span><div>Wedding<br />Moments</div></Link>
+    <aside className="admin-sidebar"><Link className="admin-brand" href="/" aria-label="Văn Thọ & Hồng Thắm - Trang chủ"><span className="couple-logo" aria-hidden="true"><i>&amp;</i><b>Thọ</b><b>Thắm</b></span><div>Văn Thọ &amp;<br />Hồng Thắm</div></Link>
       <nav aria-label="Quản trị">{sections.map(({ id, label, icon: Icon }) => <button key={id} aria-current={section === id ? "page" : undefined} className={section === id ? "active" : ""} onClick={() => { setSection(id); setNotice(""); }}><Icon size={18} />{label}</button>)}</nav>
       <button className="admin-logout" disabled={signingOut} onClick={() => void signOut()}><LogOut size={17} />{signingOut ? "Đang đăng xuất…" : "Đăng xuất"}</button>
     </aside>
@@ -167,12 +167,12 @@ export function AdminDashboard() {
         {notice && <p className="admin-notice" role="status">{notice}</p>}
         {section === "overview" && <>
           <div className="admin-stats"><article><small>Album</small><strong>{data.albums.length}</strong></article><article><small>Ảnh trong thư viện</small><strong>{data.photos.length}</strong></article><article><small>Ảnh đã tải lên</small><strong>{data.photos.filter(p => !p.demo).length}</strong></article></div>
-          <section className="admin-panel"><h2>Thư viện của Thọ Nguyễn</h2><p>Quản lý album, sắp xếp ảnh và tải ảnh gốc ở một nơi.</p><div className="admin-toolbar"><button onClick={() => setSection("upload")}>Tải ảnh lên</button><button onClick={() => setSection("albums")}>Quản lý album</button></div></section>
+          <section className="admin-panel"><h2>Thư viện của {data.settings.adminName}</h2><p>Quản lý album, sắp xếp ảnh và tải ảnh gốc ở một nơi.</p><div className="admin-toolbar"><button className="admin-primary" onClick={() => setSection("upload")}>Tải ảnh lên</button><button onClick={() => setSection("albums")}>Quản lý album</button></div></section>
           {data.photos.some(p => p.demo) && <p className="admin-muted">Thư viện hiện có ảnh mẫu lặp lại để minh họa bố cục. Ảnh bạn tải lên sẽ được lưu riêng, giữ nguyên file gốc.</p>}
           <section className="admin-panel"><h2>Các album</h2>{data.albums.map(a => <button className="admin-album-row" key={a.slug} onClick={() => { setAlbumFilter(a.slug); setPage(0); setSection("photos"); }}><span>{a.name}</span><span>{data.photos.filter(p => p.album === a.slug).length} ảnh</span></button>)}</section>
         </>}
         {section === "albums" && <>
-          <div className="admin-toolbar"><h2>Album ảnh</h2><button disabled={!ready || busy} onClick={() => setEditor({ slug: crypto.randomUUID(), name: "", time: "" })}><Plus size={16} />Tạo album</button></div>
+          <div className="admin-toolbar"><h2>Album ảnh</h2><button className="admin-primary" disabled={!ready || busy} onClick={() => setEditor({ slug: crypto.randomUUID(), name: "", time: "" })}><Plus size={16} />Tạo album</button></div>
           {editor && <form className="admin-panel admin-form" onSubmit={e => { e.preventDefault(); void save({ action: "album", ...editor }); }}>
             <label>Tên album<input required maxLength={100} value={editor.name} onChange={e => setEditor({ ...editor, name: e.target.value })} /></label>
             <label>Ngày / mô tả<input maxLength={100} value={editor.time} onChange={e => setEditor({ ...editor, time: e.target.value })} /></label>
@@ -208,8 +208,9 @@ export function AdminDashboard() {
           <button className="dropzone" disabled={!ready || !currentUploadAlbum} onClick={() => fileInput.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}><Plus /><strong>Kéo thả hoặc chọn ảnh</strong></button>
           <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
           <p className="admin-muted">Không giới hạn số ảnh trong mỗi lần chọn. File gốc được tải thẳng lên R2, không nén và không đi qua Vercel; hệ thống tải song song tối đa 4 ảnh.</p>
-          <div className="admin-toolbar"><h3>Hàng đợi</h3><span role="status">{queue.filter(q => q.status === "done").length}/{queue.length} hoàn tất · {queue.filter(q => q.status === "failed").length} lỗi</span>
-            <button onClick={() => { paused.current = !paused.current; setQueuePaused(paused.current); if (!paused.current) void drainQueue(); }}>{queuePaused ? "Tiếp tục tải" : "Tạm dừng sau ảnh đang tải"}</button>
+          <div className="queue-summary"><div className="queue-summary-heading"><h3>Hàng đợi</h3><span>{queue.length} ảnh</span></div><div className="queue-counts" role="status"><span><i className="queue-dot done" />{queue.filter(q => q.status === "done").length} xong</span><span><i className="queue-dot uploading" />{queue.filter(q => q.status === "uploading").length} đang tải</span><span><i className="queue-dot waiting" />{queue.filter(q => q.status === "waiting").length} chờ</span><span><i className="queue-dot failed" />{queue.filter(q => q.status === "failed").length} lỗi</span></div><progress aria-label="Tiến độ hàng đợi" max={Math.max(1, queue.length * 100)} value={queue.reduce((total, item) => total + (item.status === "done" ? 100 : item.status === "uploading" ? item.progress : 0), 0)} /></div>
+          <div className="admin-toolbar queue-actions">
+            <button onClick={() => { paused.current = !paused.current; setQueuePaused(paused.current); if (!paused.current) void drainQueue(); }}>{queuePaused ? "Tiếp tục" : "Tạm dừng"}</button>
             <button disabled={!queue.some(q => q.status === "failed")} onClick={() => {
               const failed = queue.filter(q => q.status === "failed" && ["image/jpeg", "image/png", "image/webp"].includes(q.file.type) && q.file.size > 0 && q.file.size <= 50 * 1024 * 1024);
               work.current.push(...failed.filter(q => !work.current.some(w => w.id === q.id)));
