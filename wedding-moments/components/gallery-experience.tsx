@@ -9,7 +9,6 @@ import { readFavorites, writeFavorites } from "@/lib/favorites";
 import { downloadZip } from "@/lib/download-zip";
 import { getPhotoThumbnailUrl, getPhotoPreviewUrl } from "@/lib/photo-urls";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { ReadyDownload } from "@/components/ready-download";
 import { resolvePhotoIndex } from "@/lib/photo-navigation";
 
 export function GalleryExperience({ photos, albumName, albumSlug }: { photos: Photo[]; albumName: string; albumSlug?: string }) {
@@ -113,7 +112,7 @@ export function GalleryExperience({ photos, albumName, albumSlug }: { photos: Ph
     if(navigator.share) await navigator.share({title:albumName,text:"Cùng xem khoảnh khắc này nhé",url});
     else { await navigator.clipboard.writeText(url); alert("Đã sao chép liên kết"); }
   };
-  const downloadPhoto=async(photo:Photo)=>{try{const result=await downloadOriginal(photo);setDownloadNotice(result==="ready"?"Ảnh sẵn sàng. Chạm Lưu ảnh.":result==="shared"?"Đã mở menu lưu ảnh của điện thoại.":"Ảnh đã được tải về.")}catch(error){if((error as Error).name!=="AbortError")setDownloadNotice("Chưa thể tải ảnh. Vui lòng thử lại.")}};
+  const downloadPhoto=async(photo:Photo)=>{try{const result=await downloadOriginal(photo);setDownloadNotice(result==="shared"?"Đã mở menu lưu ảnh của điện thoại.":"Đã gửi ảnh tới trình duyệt để tải về.")}catch(error){if((error as Error).name!=="AbortError")setDownloadNotice("Chưa thể tải ảnh. Vui lòng thử lại.")}};
 
   return <>
     <header className="gallery-header">
@@ -141,7 +140,6 @@ export function GalleryExperience({ photos, albumName, albumSlug }: { photos: Ph
     <Dialog open={active!==null} onOpenChange={open=>{if(!open)closePhoto();}}>
       <DialogContent className="lightbox" showCloseButton={false}>
         <DialogTitle className="sr-only">Xem ảnh toàn màn hình</DialogTitle><DialogDescription className="sr-only">Vuốt hoặc dùng phím mũi tên để chuyển ảnh.</DialogDescription>
-        <ReadyDownload inViewer />
         {current&&<>
           <div className="lightbox-top"><span>{active!+1} / {photos.length}</span><div><button onClick={()=>toggleFavorite(current.id)} aria-label="Yêu thích"><Heart fill={favorites.has(current.id)?"currentColor":"none"}/></button><button onClick={share} aria-label="Chia sẻ"><Share2/></button><button onClick={()=>downloadPhoto(current)} aria-label="Tải ảnh về thiết bị"><Download/></button><button onClick={()=>document.documentElement.requestFullscreen?.()} aria-label="Toàn màn hình"><Expand/></button><button onClick={closePhoto} aria-label="Đóng"><X/></button></div></div>
           <button className="lightbox-arrow left" onClick={()=>move(-1)} aria-label="Ảnh trước"><ChevronLeft/></button>

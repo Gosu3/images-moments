@@ -6,7 +6,6 @@ import type { Photo } from "@/lib/mock-data";
 import { getPhotoPreviewUrl } from "@/lib/photo-urls";
 import { readFavorites, writeFavorites } from "@/lib/favorites";
 import { downloadOriginal, preparePreviewDownload } from "@/lib/save-photo";
-import { ReadyDownload } from "@/components/ready-download";
 
 export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index: number | null; onIndex: (index: number | null) => void }) {
   const [scale, setScale] = useState(1);
@@ -84,7 +83,6 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
   const zoom = (value: number) => zoomAt(value);
   return <Dialog open={photo !== null && photo !== undefined} onOpenChange={open => { if (!open) { reset(); onIndex(null); } }}>
     <DialogContent className="photo-viewer" showCloseButton={false}>
-      <ReadyDownload inViewer />
       <DialogTitle className="sr-only">Phóng to ảnh</DialogTitle>
       <DialogDescription className="sr-only">Cuộn chuột hoặc chụm hai ngón tay để zoom tại vị trí đang xem. Kéo ảnh để xem chi tiết. Dùng nút cộng, trừ để thay đổi độ phóng đại.</DialogDescription>
       <div className="viewer-toolbar"><span>{index === null ? 0 : index + 1} / {photos.length}</span><div>
