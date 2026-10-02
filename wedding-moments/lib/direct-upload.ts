@@ -1,13 +1,25 @@
 import { DUPLICATE_UPLOAD_CODE, DuplicateUploadError } from "./upload-duplicates";
 type Presign = { mode: "legacy" | "direct"; photoId?: string; ready?: boolean; uploadUrl?: string; headers?: Record<string, string>; error?: string; code?: string };
+// Presign and finalize are idempotent per uploadId/photoId, so a busy library
+// (many parallel uploads) or a dropped connection is retried instead of
+// leaving a photo silently failed in a long queue.
+const RETRY_DELAYS = [1000, 2500, 5000];
 async function post(url: string, data: unknown) {
-  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-  const result = await response.json() as Presign;
-  if (!response.ok) {
+  for (let attempt = 0; ; attempt++) {
+    let response: Response;
+    try { response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); }
+    catch (error) {
+      if (attempt >= RETRY_DELAYS.length) throw error;
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt] + Math.random() * 500)); continue;
+    }
+    const result = await response.json().catch(() => ({})) as Presign;
+    if (response.ok) return result;
     if (result.code === DUPLICATE_UPLOAD_CODE) throw new DuplicateUploadError(result.error);
+    if ((result.code === "LIBRARY_BUSY" || response.status === 503) && attempt < RETRY_DELAYS.length) {
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt] + Math.random() * 500)); continue;
+    }
     throw new Error(result.error || "Không thể tải ảnh.");
   }
-  return result;
 }
 export async function uploadDirect(file: File, album: string, uploadId: string, progress: (value: number) => void) {
   const sha256 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(b => b.toString(16).padStart(2, "0")).join("");

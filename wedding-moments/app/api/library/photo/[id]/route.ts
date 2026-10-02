@@ -2,7 +2,7 @@ import { libraryError, LibraryError, readSharedLibrary } from "@/lib/library-ser
 import { getOriginal } from "@/lib/original-storage";
 import { signedPreviewUrl } from "@/lib/cloudflare-images";
 import { imageDeliveryUrl } from "@/lib/image-service";
-import { getGalleryPreview } from "@/lib/gallery-preview";
+import { galleryVariantLocation, getGalleryPreview } from "@/lib/gallery-preview";
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -20,6 +20,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
     const variant = new URL(request.url).searchParams.get("variant");
     if ((process.env.VERCEL || photo.pipeline === "r2-direct") && (variant === "thumbnail" || variant === "preview")) {
+      // Ready variants are served by R2 itself; the guest gallery is public on
+      // Vercel, so the CDN may cache this redirect and absorb repeat requests.
+      const location = await galleryVariantLocation(photo, variant).catch(() => null);
+      if (location) return new Response(null, { status: 302, headers: { Location: location, "Cache-Control": process.env.VERCEL ? "public, max-age=3600, s-maxage=3600" : "private, max-age=3600", "Referrer-Policy": "no-referrer" } });
       const preview = await getGalleryPreview(photo, variant);
       return new Response(preview.body, { headers: { "Content-Type": "image/webp", "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" } });
     }

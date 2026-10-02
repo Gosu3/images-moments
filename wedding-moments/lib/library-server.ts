@@ -4,6 +4,8 @@ import { demoLibrary, type Library } from "./library-model";
 import { libraryProvider } from "./cloud-config";
 import { readSupabaseLibrary, saveSupabaseLibrary } from "./supabase-library";
 
+// Transient optimistic-lock exhaustion; safe for clients to retry idempotent calls.
+export const LIBRARY_BUSY_CODE = "LIBRARY_BUSY";
 export class LibraryError extends Error {
   constructor(message: string, public status = 503, public code?: string) { super(message); }
 }
@@ -49,10 +51,10 @@ export async function readLibrary(owner: string): Promise<Library> {
 export async function mutateLibrary(owner: string, update: (library: Library) => void, expected?: number) {
   const provider = libraryProvider();
   if (provider === "d1") await db().prepare("INSERT OR IGNORE INTO libraries (owner, data, revision) VALUES (?, ?, 0)").bind(owner, JSON.stringify(demoLibrary())).run();
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (let attempt = 0; attempt < 12; attempt++) {
     // Concurrent uploads use optimistic revisions. Jitter avoids repeatedly
     // colliding with the same writer, without relaxing conflict detection.
-    if (attempt) await new Promise(resolve => setTimeout(resolve, 40 * 2 ** Math.min(attempt, 4) + Math.random() * 100));
+    if (attempt) await new Promise(resolve => setTimeout(resolve, 40 * 2 ** Math.min(attempt, 4) + Math.random() * 200));
     const library = await readLibrary(owner);
     if (expected !== undefined && expected !== library.revision) throw new LibraryError("Dữ liệu vừa thay đổi. Hãy tải lại danh sách rồi thử lại.", 409);
     update(library);
@@ -63,7 +65,7 @@ export async function mutateLibrary(owner: string, update: (library: Library) =>
     const result = await db().prepare("UPDATE libraries SET data = ?, revision = revision + 1 WHERE owner = ? AND revision = ?").bind(JSON.stringify(library), owner, library.revision).run();
     if (result.meta.changes) return { ...library, revision: library.revision + 1 };
   }
-  throw new LibraryError("Thư viện đang được cập nhật. Vui lòng thử lại.", 409);
+  throw new LibraryError("Thư viện đang được cập nhật. Vui lòng thử lại.", 409, LIBRARY_BUSY_CODE);
 }
 export function libraryError(error: unknown) {
   if (error instanceof LibraryError) return Response.json({ error: error.message, ...(error.code ? { code: error.code } : {}) }, { status: error.status });

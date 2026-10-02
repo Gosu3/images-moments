@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { getOriginal, putOriginal } from "./original-storage";
+import { cacheableVariantUrl, getOriginal, headOriginal, putOriginal } from "./original-storage";
 import { LibraryError } from "./library-server";
 import type { LibraryPhoto } from "./library-model";
 
@@ -14,6 +14,15 @@ export async function resizeGalleryImage(bytes: Uint8Array, variant: "thumbnail"
 // Existing uploads gain thumbnails on first view; later views read the small file.
 export function galleryVariantKey(photo: Pick<LibraryPhoto, "key">, variant: "thumbnail" | "preview") {
   return `${photo.key}.wm-${variant}-v2.webp`;
+}
+// Direct R2 location of an already generated variant, or null when it must
+// still be generated (or the photo lives in the Worker binding bucket).
+export async function galleryVariantLocation(photo: LibraryPhoto, variant: "thumbnail" | "preview") {
+  if (photo.storage !== "s3" || !photo.key) return null;
+  const key = galleryVariantKey(photo, variant);
+  try { await headOriginal({ ...photo, key }); }
+  catch (error) { if (error instanceof LibraryError && error.status === 404) return null; throw error; }
+  return cacheableVariantUrl(key);
 }
 const pending = new Map<string, Promise<Uint8Array>>();
 export async function getGalleryPreview(photo: LibraryPhoto, variant: "thumbnail" | "preview") {

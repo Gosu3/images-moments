@@ -10,6 +10,7 @@ import type { LibraryAlbum, LibraryPhoto } from "@/lib/library-model";
 import { prepareUpload } from "@/lib/image-upload";
 import { StorageStatus } from "@/components/storage-status";
 import { uploadDirect } from "@/lib/direct-upload";
+import { isAppleMobile, needsJpegConversion, prepareUploadFile, uploadFilename } from "@/lib/convert-image";
 import { getPhotoThumbnailUrl, isPhotoReady } from "@/lib/photo-urls";
 import { downloadOriginal } from "@/lib/save-photo";
 import { DUPLICATE_UPLOAD_CODE, DuplicateUploadError, findDuplicatePhoto, normalizedFilename } from "@/lib/upload-duplicates";
@@ -74,7 +75,7 @@ export function AdminDashboard() {
     return () => { clearTimeout(timer); window.removeEventListener("focus", sweep); document.removeEventListener("visibilitychange", visible); };
   }, [nextDuplicateExpiry]);
   function releaseName(item: QueueItem) {
-    const name = normalizedFilename(item.file.name);
+    const name = normalizedFilename(uploadFilename(item.file));
     if (reservedNames.current.get(name) === item.id) reservedNames.current.delete(name);
   }
   function scheduleLibraryReload() {
@@ -128,17 +129,22 @@ export function AdminDashboard() {
     const worker = async () => {
     while (work.current.length && !paused.current) {
       const item = work.current.shift()!;
-      if (findDuplicatePhoto(libraryPhotos.current, item.file.name, item.id)) {
+      if (findDuplicatePhoto(libraryPhotos.current, uploadFilename(item.file), item.id)) {
         releaseName(item);
         setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "duplicate", progress: 0, duplicateAt: Date.now(), error: undefined, warning: undefined } : x));
         continue;
       }
-      reservedNames.current.set(normalizedFilename(item.file.name), item.id);
+      reservedNames.current.set(normalizedFilename(uploadFilename(item.file)), item.id);
       setQueue(q => q.map(x => x.id === item.id ? { ...x, status: "uploading" } : x));
       try {
+        // HEIC and other formats become JPEG here, before hashing/upload.
+        const source = await prepareUploadFile(item.file);
+        if (source.converted && source.file.size > 50 * 1024 * 1024) throw new Error("Ảnh sau khi chuyển sang JPEG vượt quá 50 MB.");
+        const conversionWarning = source.downscaled ? `Ảnh ${source.file.name} được thu nhỏ để chuyển sang JPEG trên thiết bị này.` : undefined;
+        if (source.file !== item.file) { item.file = source.file; setQueue(q => q.map(x => x.id === item.id ? { ...x, file: source.file, warning: conversionWarning } : x)); }
         const direct = config.pipeline !== "legacy" && await uploadDirect(item.file, item.album, item.id, progress => setQueue(q => q.map(x => x.id === item.id ? { ...x, progress } : x)));
         if (direct) {
-          setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: undefined } : x));
+          setQueue(q => q.map(x => x.id === item.id ? { ...x, progress: 100, status: "done", warning: conversionWarning } : x));
           scheduleLibraryReload();
           continue;
         }
@@ -247,13 +253,13 @@ export function AdminDashboard() {
           <h2>Thêm ảnh gốc</h2><div className="admin-toolbar">{albumSelect(currentUploadAlbum, setUploadAlbum)}<span>JPEG, PNG, WebP · Tối đa 50 MB/ảnh</span></div>
           {data.photos.filter(p => (p.pipeline === "r2-v2" || p.pipeline === "r2-direct") && p.status !== "ready" && p.status !== "deleted").map(p => <div className="admin-upload-row" key={p.id}><div><strong>{p.filename}</strong><small>{p.status === "processing" ? "Đang tạo thumbnail và preview" : p.status === "pending" ? "Chờ upload R2 hoàn tất" : "Xử lý thất bại"}</small></div><button disabled={busy} onClick={() => void retryProcessing(p.id)}>Thử lại xử lý</button><button disabled={busy} onClick={() => setConfirm({ text: `Xóa ảnh chưa hoàn tất “${p.filename}” và dọn file liên quan?`, operation: { action: "deletePhotos", ids: [p.id] } })}>Xóa</button></div>)}
           <button className="dropzone" disabled={!ready || !currentUploadAlbum} onClick={() => fileInput.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}><Plus /><strong>Kéo thả hoặc chọn ảnh</strong></button>
-          <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
+          <input ref={el => { fileInput.current = el; if (el && isAppleMobile()) el.accept = "image/jpeg,image/png,image/webp"; }} hidden type="file" accept="image/*,.heic,.heif" multiple onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
           <p className="admin-muted">Giữ nguyên ảnh gốc · Tải đồng thời 4 ảnh · Ảnh trùng tên được bỏ qua và tự dọn khỏi hàng đợi sau 5 phút.</p>
           <div className="queue-summary"><div className="queue-summary-heading"><h3>Hàng đợi</h3><span>{queue.length} ảnh</span></div><div className="queue-counts" role="status"><span><i className="queue-dot done" />{queue.filter(q => q.status === "done").length} xong</span><span><i className="queue-dot uploading" />{queue.filter(q => q.status === "uploading").length} đang tải</span><span><i className="queue-dot waiting" />{queue.filter(q => q.status === "waiting").length} chờ</span><span><i className="queue-dot failed" />{queue.filter(q => q.status === "failed").length} lỗi</span><span className="queue-duplicate-count"><i className="queue-dot duplicate" />{queue.filter(q => q.status === "duplicate").length} trùng lặp</span></div><progress aria-label="Tiến độ hàng đợi" max={Math.max(1, uploadItems.length * 100)} value={uploadItems.reduce((total, item) => total + (item.status === "done" ? 100 : item.status === "uploading" ? item.progress : 0), 0)} /></div>
           <div className="admin-toolbar queue-actions">
             <button onClick={() => { paused.current = !paused.current; setQueuePaused(paused.current); if (!paused.current) void drainQueue(); }}>{queuePaused ? "Tiếp tục" : "Tạm dừng"}</button>
             <button disabled={!queue.some(q => q.status === "failed")} onClick={() => {
-              const failed = queue.filter(q => q.status === "failed" && ["image/jpeg", "image/png", "image/webp"].includes(q.file.type) && q.file.size > 0 && q.file.size <= 50 * 1024 * 1024);
+              const failed = queue.filter(q => q.status === "failed" && q.file.size > 0 && (needsJpegConversion(q.file) || q.file.size <= 50 * 1024 * 1024));
               work.current.push(...failed.filter(q => !work.current.some(w => w.id === q.id)));
               const ids = new Set(failed.map(q => q.id));
               setQueue(q => q.map(x => ids.has(x.id) ? { ...x, status: "waiting", progress: 0 } : x)); void drainQueue();

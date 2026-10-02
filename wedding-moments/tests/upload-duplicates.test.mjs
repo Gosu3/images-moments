@@ -13,7 +13,8 @@ function compiledUrl(path, imports = {}) {
 }
 const duplicateUrl = compiledUrl('lib/upload-duplicates.ts');
 const { DuplicateUploadError } = await import(duplicateUrl);
-const queue = await import(compiledUrl('lib/upload-queue.ts', { './upload-duplicates': duplicateUrl }));
+const convertUrl = compiledUrl('lib/convert-image.ts');
+const queue = await import(compiledUrl('lib/upload-queue.ts', { './upload-duplicates': duplicateUrl, './convert-image': convertUrl }));
 const file = name => new File(['original bytes'], name, { type: 'image/jpeg' });
 
 test('duplicate filenames across albums and within selections never enter upload work', () => {
@@ -55,6 +56,8 @@ const stateUrl = dataUrl(`
  export async function createR2SignedUrl(input) { state.signed.push(input); return 'https://r2.example/upload'; }
  export async function putOriginal(key) { state.writes.push(key); return 'binding'; }
  export async function headOriginal() { throw new Error('Unexpected storage read'); }
+ export async function readOriginalHeader() { throw new Error('Unexpected storage read'); }
+ export function setting() { return ''; }
  export async function removeUncommittedOriginal() {}
  export function galleryVariantKey() { return 'unused'; }
  export async function uploadPreview() {}
@@ -62,7 +65,7 @@ const stateUrl = dataUrl(`
  export function validImageHeader() { return true; }
 `);
 const { state } = await import(stateUrl);
-const lifecycleImports = Object.fromEntries(['./library-server', './image-service', './r2-presign', './image-protocol', './cloud-config', './original-storage', './gallery-preview'].map(name => [name, stateUrl]));
+const lifecycleImports = Object.fromEntries(['./library-server', './image-service', './r2-presign', './image-protocol', './cloud-config', './original-storage', './gallery-preview', './image-upload'].map(name => [name, stateUrl]));
 const { beginUpload } = await import(compiledUrl('lib/image-lifecycle.ts', { ...lifecycleImports, './upload-duplicates': duplicateUrl, zod: pathToFileURL(require.resolve('zod')).href }));
 const input = (filename, uploadId = crypto.randomUUID()) => ({ album: 'album-a', filename, uploadId, contentType: 'image/jpeg', size: 14, sha256: 'a'.repeat(64), width: 100, height: 100 });
 

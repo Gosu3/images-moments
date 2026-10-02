@@ -4,8 +4,9 @@ import { imagePipelineEnabled, imageServiceCall, originalsBucket, type Processed
 import { createR2SignedUrl } from "./r2-presign";
 import { UPLOAD_TTL } from "./image-protocol";
 import type { LibraryPhoto } from "./library-model";
-import { directR2Enabled } from "./cloud-config";
-import { headOriginal, removeUncommittedOriginal } from "./original-storage";
+import { directR2Enabled, setting } from "./cloud-config";
+import { headOriginal, readOriginalHeader, removeUncommittedOriginal } from "./original-storage";
+import { validImageHeader } from "./image-upload";
 import { galleryVariantKey } from "./gallery-preview";
 import { DUPLICATE_UPLOAD_CODE, findDuplicatePhoto } from "./upload-duplicates";
 
@@ -45,10 +46,13 @@ export async function beginUpload(owner: string, body: unknown) {
   });
   const photo = library.photos.find(p => p.uploadId === input.uploadId)!;
   if (photo.status === "ready") return { mode: "direct" as const, photoId: photo.id, ready: true };
+  // Opt-in: R2 rejects the PUT unless the bytes match the client SHA-256.
+  // Requires the bucket CORS AllowedHeaders to include x-amz-checksum-sha256.
+  const checksum = setting("R2_UPLOAD_CHECKSUM") === "true" && photo.pipeline === "r2-direct" ? Buffer.from(photo.sha256!, "hex").toString("base64") : undefined;
   const uploadUrl = await createR2SignedUrl({ method: "PUT", key: photo.pipeline === "r2-v2" ? photo.stagingKey! : photo.key!, contentType: photo.contentType,
-    expires: UPLOAD_TTL, bucketName: photo.pipeline === "r2-v2" ? originalsBucket() : undefined });
+    expires: UPLOAD_TTL, bucketName: photo.pipeline === "r2-v2" ? originalsBucket() : undefined, checksumSha256: checksum });
   if (!uploadUrl) throw new LibraryError("Chưa cấu hình R2 upload.");
-  return { mode: "direct" as const, photoId: photo.id, uploadUrl, headers: { "Content-Type": photo.contentType! }, expiresIn: UPLOAD_TTL };
+  return { mode: "direct" as const, photoId: photo.id, uploadUrl, headers: { "Content-Type": photo.contentType!, ...(checksum ? { "x-amz-checksum-sha256": checksum } : {}) }, expiresIn: UPLOAD_TTL };
 }
 
 export async function finalizeUpload(owner: string, id: string) {
@@ -77,6 +81,10 @@ export async function finalizeUpload(owner: string, id: string) {
       if (!Number.isFinite(object.size) || object.size !== photo.size || object.contentType !== photo.contentType) {
         throw new LibraryError("File trên R2 không khớp dung lượng hoặc định dạng đã chọn.", 422);
       }
+      // A renamed HEIC/HTML file passes the MIME check; its real header does not.
+      if (!validImageHeader(await readOriginalHeader(photo), photo.contentType!)) {
+        throw new LibraryError("Nội dung file không phải ảnh JPEG, PNG hoặc WebP hợp lệ.", 422);
+      }
     }
     const saved = await mutateLibrary(owner, data => {
       const target = data.photos.find(p => p.id === id);
@@ -102,9 +110,12 @@ export async function finalizeUpload(owner: string, id: string) {
   }
 }
 
-export async function cleanupPhotos(owner: string) {
+// minAgeMs keeps recently deleted originals recoverable (used by the scheduled
+// cleanup); the manual admin button passes 0 and keeps its current behavior.
+export async function cleanupPhotos(owner: string, minAgeMs = 0) {
   const library = await readLibrary(owner);
-  const jobs = library.photos.filter(p => (p.pipeline === "r2-v2" || p.pipeline === "r2-direct" || p.migrationTarget) && !p.cleanupComplete && p.status === "deleted" && Date.parse(p.cleanupAfter || "") <= Date.now()).slice(0, 20);
+  const jobs = library.photos.filter(p => (p.pipeline === "r2-v2" || p.pipeline === "r2-direct" || p.migrationTarget) && !p.cleanupComplete && p.status === "deleted" && Date.parse(p.cleanupAfter || "") <= Date.now()
+    && (!minAgeMs || Date.parse(p.deletedAt || "") <= Date.now() - minAgeMs)).slice(0, 20);
   let removed = 0;
   for (const photo of jobs) {
     try {

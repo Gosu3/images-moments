@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { demoLibrary, type Library } from "./library-model";
+import { guestPollDelay } from "./poll-delay";
 export function useLibrary(admin = false) {
   const [data, setData] = useState<Library>(demoLibrary);
   const [error, setError] = useState("");
@@ -8,6 +9,8 @@ export function useLibrary(admin = false) {
   const [ready, setReady] = useState(false);
   const inFlight = useRef(false);
   const etag = useRef("");
+  const lastRevision = useRef(-1);
+  const changedAt = useRef(0);
   const reload = useCallback(async () => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -24,6 +27,7 @@ export function useLibrary(admin = false) {
         throw new Error(result.error || "Không thể tải thư viện.");
       }
       etag.current = response.headers.get("etag") || "";
+      if (result.revision !== lastRevision.current) { lastRevision.current = result.revision; changedAt.current = Date.now(); }
       setData(previous => result.revision < previous.revision ? previous : { ...result, photos: result.photos.filter(p => p.status !== "deleted") }); setError(""); setAuthRequired(false); setReady(true);
     } catch (e) { setError((e as Error).message); }
     finally { inFlight.current = false; }
@@ -34,11 +38,14 @@ export function useLibrary(admin = false) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void reload();
     const refresh = () => { if (document.visibilityState === "visible") void reload(); };
-    const timer = setInterval(refresh, admin ? 5000 : 3000);
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => { timer = setTimeout(() => { refresh(); schedule(); }, admin ? 5000 : guestPollDelay(Date.now() - changedAt.current)); };
+    changedAt.current = Date.now();
+    schedule();
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
     document.addEventListener("visibilitychange", refresh);
-    return () => { clearInterval(timer); window.removeEventListener("focus", refresh); window.removeEventListener("online", refresh); document.removeEventListener("visibilitychange", refresh); };
+    return () => { clearTimeout(timer); window.removeEventListener("focus", refresh); window.removeEventListener("online", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [reload, admin]);
   async function mutate(operation: Record<string, unknown>) {
     const response = await fetch("/api/library", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...operation, revision: data.revision }) });

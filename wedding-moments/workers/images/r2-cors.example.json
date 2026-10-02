@@ -2,7 +2,7 @@
   {
     "AllowedOrigins": ["https://YOUR-PRODUCTION-DOMAIN", "http://localhost:5173"],
     "AllowedMethods": ["PUT", "GET", "HEAD"],
-    "AllowedHeaders": ["Content-Type"],
+    "AllowedHeaders": ["Content-Type", "x-amz-checksum-sha256"],
     "ExposeHeaders": ["ETag", "Content-Length", "Content-Type", "Content-Disposition"],
     "MaxAgeSeconds": 3600
   }
