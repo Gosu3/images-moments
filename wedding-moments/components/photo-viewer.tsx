@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Minus, Plus, X, Heart, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { Photo } from "@/lib/mock-data";
-import { getPhotoPreviewUrl } from "@/lib/photo-urls";
+import { getPhotoPreviewUrl, imageFallback } from "@/lib/photo-urls";
 import { readFavorites, writeFavorites } from "@/lib/favorites";
 import { downloadOriginal, preparePreviewDownload } from "@/lib/save-photo";
 import { ReadyDownload } from "@/components/ready-download";
@@ -140,7 +140,7 @@ export function PhotoViewer({ photos, index, onIndex }: { photos: Photo[]; index
         }}
         onPointerCancel={e => { pointers.current.delete(e.pointerId); swipe.current = null; setDragDown(0); }}
         onLostPointerCapture={e => { pointers.current.delete(e.pointerId); swipe.current = null; setDragDown(0); }}>
-        {photo && <img key={photo.id} src={getPhotoPreviewUrl(photo)} alt={photo.alt} draggable={false} onLoad={() => apply({ ...transform.current })} style={{ transition: "none", transform: `translate(${offset.x}px, ${offset.y + dragDown}px) scale(${scale})` }} />}
+        {photo && <img key={photo.id} src={getPhotoPreviewUrl(photo)} onError={imageFallback(photo, "preview")} alt={photo.alt} draggable={false} onLoad={() => apply({ ...transform.current })} style={{ transition: "none", transform: `translate(${offset.x}px, ${offset.y + dragDown}px) scale(${scale})` }} />}
       </div>
       {photos.length > 1 && <><button className="viewer-prev" aria-label="Ảnh trước" onClick={() => move(-1)}><ChevronLeft /></button><button className="viewer-next" aria-label="Ảnh tiếp theo" onClick={() => move(1)}><ChevronRight /></button></>}
     </DialogContent>

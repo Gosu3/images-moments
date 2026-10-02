@@ -25,7 +25,9 @@ test('guest projection exposes ready photos without R2 keys, leases, hashes or f
 test('anonymous gallery returns data and conditional refresh returns 304', async () => {
   const server = moduleUrl(`export async function readSharedLibrary(){return {revision:9,settings:{title:'Wedding'},albums:[],photos:[]}}; export function libraryError(){return new Response(null,{status:500})}`);
   const route = await import(moduleUrl(readFileSync('app/api/gallery/route.ts','utf8')
-    .replace('@/lib/library-server',server).replace('@/lib/public-library',projectionUrl)));
+    .replace('@/lib/library-server',server).replace('@/lib/public-library',projectionUrl)
+    .replace('@/lib/original-storage',moduleUrl(`export function variantUrlWindow(){return 1}; export async function cacheableVariantUrl(k){return 'https://r2/'+k}`))
+    .replace('@/lib/gallery-preview',moduleUrl(`export function galleryVariantKey(p,v){return p.key+'.'+v}`))));
   const response = await route.GET(new Request('https://test/api/gallery'));
   assert.equal(response.status,200);
   assert.equal((await response.json()).revision,9);

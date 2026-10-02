@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { useLibrary } from "@/lib/use-library";
 import { downloadOriginal } from "@/lib/save-photo";
-import { getPhotoPreviewUrl, getPhotoThumbnailUrl, isPhotoReady } from "@/lib/photo-urls";
+import { getPhotoPreviewUrl, getPhotoThumbnailUrl, imageFallback, isPhotoReady } from "@/lib/photo-urls";
 
 export function HomeAlbumTabs() {
   const { data, error, ready } = useLibrary();
@@ -26,7 +26,7 @@ export function HomeAlbumTabs() {
         <div className="tab-album-meta"><span>{album.time}</span><p>{data.photos.filter(p => p.album === album.slug).length} ảnh</p></div>
         <div className="home-photo-grid">
           {data.photos.filter(p => isPhotoReady(p) && p.album === album.slug).map((photo, index) => <article className="home-photo-card" key={photo.id}>
-            <button className="home-photo-open" onPointerEnter={() => { const image = new Image(); image.src = getPhotoPreviewUrl(photo); }} onFocus={() => { const image = new Image(); image.src = getPhotoPreviewUrl(photo); }} onClick={() => setActive(index)} aria-label={`Phóng to ${photo.alt}`}><img src={getPhotoThumbnailUrl(photo)} alt={photo.alt} width={photo.width} height={photo.height} loading={index < 12 ? "eager" : "lazy"} decoding="async" fetchPriority={index < 4 ? "high" : "auto"} /></button>
+            <button className="home-photo-open" onPointerEnter={() => { const image = new Image(); image.src = getPhotoPreviewUrl(photo); }} onFocus={() => { const image = new Image(); image.src = getPhotoPreviewUrl(photo); }} onClick={() => setActive(index)} aria-label={`Phóng to ${photo.alt}`}><img src={getPhotoThumbnailUrl(photo)} onError={imageFallback(photo, "thumbnail")} alt={photo.alt} width={photo.width} height={photo.height} loading={index < 12 ? "eager" : "lazy"} decoding="async" fetchPriority={index < 4 ? "high" : "auto"} /></button>
             <button className="home-photo-download" disabled={downloading !== null} aria-busy={downloading === photo.id} onClick={async () => { setDownloading(photo.id); try { await downloadOriginal(photo); } catch (e) { if ((e as Error).name !== "AbortError") alert("Chưa thể tải ảnh. Vui lòng thử lại."); } finally { setDownloading(null); } }} aria-label={downloading === photo.id ? "Đang tải ảnh gốc" : `Tải về ${photo.alt}`}><Download size={17} className={downloading === photo.id ? "download-arrow-loading" : undefined} /><span>{downloading === photo.id ? "Đang tải…" : "Tải về"}</span></button>
           </article>)}
         </div>

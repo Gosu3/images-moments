@@ -58,6 +58,7 @@ export async function readOriginalHeader(photo: LibraryPhoto, length = 32): Prom
   return new Uint8Array(await response.arrayBuffer()).slice(0, length);
 }
 const VARIANT_URL_WINDOW = 6 * 3600 * 1000;
+export function variantUrlWindow(now = Date.now()) { return Math.floor(now / VARIANT_URL_WINDOW); }
 // Stable for each 6-hour window (valid 24h) so browsers and the CDN can reuse
 // the same thumbnail URL instead of streaming bytes through the app server.
 export async function cacheableVariantUrl(key: string, now = Date.now()) {

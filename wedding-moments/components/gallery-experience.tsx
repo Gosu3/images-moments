@@ -7,7 +7,7 @@ import type { Photo } from "@/lib/mock-data";
 import { downloadOriginal, preparePreviewDownload } from "@/lib/save-photo";
 import { readFavorites, writeFavorites } from "@/lib/favorites";
 import { downloadZip } from "@/lib/download-zip";
-import { getPhotoThumbnailUrl, getPhotoPreviewUrl } from "@/lib/photo-urls";
+import { getPhotoThumbnailUrl, getPhotoPreviewUrl, imageFallback } from "@/lib/photo-urls";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ReadyDownload } from "@/components/ready-download";
 import { resolvePhotoIndex } from "@/lib/photo-navigation";
@@ -130,7 +130,7 @@ export function GalleryExperience({ photos, albumName, albumSlug }: { photos: Ph
     </section>
     <section className="home-photo-grid gallery-photo-grid" aria-label={`Ảnh trong ${albumName}`}>
       {photos.map((photo,index)=><div key={photo.id} className="photo-card home-photo-card">
-        <button className="photo-open" onPointerEnter={() => { const image = new Image(); image.src = getPhotoPreviewUrl(photo); }} onFocus={() => { const image = new Image(); image.src = getPhotoPreviewUrl(photo); }} onClick={()=>selectMode?toggleSelected(photo.id):openPhoto(index)} aria-label={`${selectMode?"Chọn":"Mở"} ${photo.alt}`}><img src={getPhotoThumbnailUrl(photo)} alt={photo.alt} loading={index<12?"eager":"lazy"} decoding="async" fetchPriority={index<4?"high":"auto"} /></button>
+        <button className="photo-open" onPointerEnter={() => { const image = new Image(); image.src = getPhotoPreviewUrl(photo); }} onFocus={() => { const image = new Image(); image.src = getPhotoPreviewUrl(photo); }} onClick={()=>selectMode?toggleSelected(photo.id):openPhoto(index)} aria-label={`${selectMode?"Chọn":"Mở"} ${photo.alt}`}><img src={getPhotoThumbnailUrl(photo)} onError={imageFallback(photo,"thumbnail")} alt={photo.alt} loading={index<12?"eager":"lazy"} decoding="async" fetchPriority={index<4?"high":"auto"} /></button>
         {selectMode&&<span className={selected.has(photo.id)?"select-dot selected":"select-dot"}>{selected.has(photo.id)&&<Check size={16}/>}</span>}
         {!selectMode&&<span className="photo-time">{photo.takenAt}</span>}
         {!selectMode&&<button className="photo-download" onClick={()=>downloadPhoto(photo)}><Download size={16}/><span>Tải về</span></button>}
@@ -146,7 +146,7 @@ export function GalleryExperience({ photos, albumName, albumSlug }: { photos: Ph
           <div className="lightbox-top"><span>{active!+1} / {photos.length}</span><div><button onClick={()=>toggleFavorite(current.id)} aria-label="Yêu thích"><Heart fill={favorites.has(current.id)?"currentColor":"none"}/></button><button onClick={share} aria-label="Chia sẻ"><Share2/></button><button onClick={()=>downloadPhoto(current)} aria-label="Tải ảnh về thiết bị"><Download/></button><button onClick={()=>document.documentElement.requestFullscreen?.()} aria-label="Toàn màn hình"><Expand/></button><button onClick={closePhoto} aria-label="Đóng"><X/></button></div></div>
           <button className="lightbox-arrow left" onClick={()=>move(-1)} aria-label="Ảnh trước"><ChevronLeft/></button>
           <div className="lightbox-stage" onTouchStart={e=>touchStart.current=e.touches.length===1?{x:e.touches[0].clientX,y:e.touches[0].clientY}:null} onTouchCancel={()=>{touchStart.current=null}} onTouchEnd={e=>{if(!touchStart.current||!e.changedTouches.length)return;const dx=e.changedTouches[0].clientX-touchStart.current.x;const dy=e.changedTouches[0].clientY-touchStart.current.y;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy))move(dx<0?1:-1);if(dy>100&&Math.abs(dy)>Math.abs(dx))closePhoto();touchStart.current=null}}>
-            <img key={current.id} src={getPhotoPreviewUrl(current)} alt={current.alt} onLoad={()=>{setLoadedPhotoId(current.id);setFailedPhotoId(null)}} onError={()=>setFailedPhotoId(current.id)}/>
+            <img key={current.id} src={getPhotoPreviewUrl(current)} alt={current.alt} onLoad={()=>{setLoadedPhotoId(current.id);setFailedPhotoId(null)}} onError={event=>{const src=event.currentTarget.src;imageFallback(current,"preview")(event);if(event.currentTarget.src===src)setFailedPhotoId(current.id)}}/>
             {failedPhotoId===current.id&&<p className="lightbox-status" role="status">Không thể tải ảnh. Hãy chuyển sang ảnh khác.</p>}
           </div>
           <button className="slideshow-btn lightbox-play" disabled={photos.length<2} aria-pressed={playing} onClick={() => setPlaying(p => !p)}>{playing ? "Dừng trình chiếu" : "Tiếp tục trình chiếu"}</button>
