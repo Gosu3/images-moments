@@ -216,10 +216,10 @@ export function AdminDashboard() {
         {notice && <p className="admin-notice" role="status">{notice}</p>}
         {section === "overview" && <>
           <div className="admin-stats"><article><small>Album</small><strong>{data.albums.length}</strong></article><article><small>Ảnh trong thư viện</small><strong>{data.photos.length}</strong></article><article><small>Ảnh đã tải lên</small><strong>{data.photos.filter(p => !p.demo).length}</strong></article></div>
-          <R2Usage photos={data.photos} />
           <section className="admin-panel"><h2>Thư viện của {data.settings.adminName}</h2><p>Quản lý album, sắp xếp ảnh và tải ảnh gốc ở một nơi.</p><div className="admin-toolbar"><button className="admin-primary" onClick={() => setSection("upload")}>Tải ảnh lên</button><button onClick={() => setSection("albums")}>Quản lý album</button></div></section>
           {data.photos.some(p => p.demo) && <p className="admin-muted">Thư viện hiện có ảnh mẫu lặp lại để minh họa bố cục. Ảnh bạn tải lên sẽ được lưu riêng, giữ nguyên file gốc.</p>}
           <section className="admin-panel"><h2>Các album</h2>{data.albums.map(a => <button className="admin-album-row" key={a.slug} onClick={() => { setAlbumFilter(a.slug); setPage(0); setSection("photos"); }}><span>{a.name}</span><span>{data.photos.filter(p => p.album === a.slug).length} ảnh · {formatBytes(albumBytes(a.slug))}</span></button>)}</section>
+          <R2Usage photos={data.photos} />
         </>}
         {section === "albums" && <>
           <div className="admin-toolbar"><h2>Album ảnh</h2><button className="admin-primary" disabled={!ready || busy} onClick={() => setEditor({ slug: crypto.randomUUID(), name: "", time: "" })}><Plus size={16} />Tạo album</button></div>
