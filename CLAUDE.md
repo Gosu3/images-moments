@@ -33,6 +33,11 @@ Two runtimes:
 - Styles: `app/globals.css`, `app/gallery-admin.css`. `/access` just redirects home.
 - `lib/mock-data.ts` still provides the `Photo` type and default album list — in use, don't delete.
 
+## Production config state (2026-10-02)
+- R2 bucket `wedding-originals` CORS: origin `https://images-moments.vercel.app`, methods PUT/GET/HEAD, headers Content-Type + x-amz-checksum-sha256.
+- Vercel: `CRON_SECRET` set (Production, Secret); cron `0 20 * * *` registered. `R2_UPLOAD_CHECKSUM` not enabled yet.
+- Verified live: `/api/gallery` CDN HIT; thumbnails 302 → R2 200 webp with stable URL.
+
 ## Commands (in `wedding-moments/`)
 `npm run typecheck` · `npm test` (node --test, 43 tests) · `npm run lint` (known `<img>` warnings) · `npm run build`
 
