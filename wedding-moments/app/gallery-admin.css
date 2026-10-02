@@ -297,3 +297,8 @@ body:has([role=dialog]) .ready-download.outside-viewer{display:none}
   .admin-content{padding:14px 12px 32px;line-height:1.5}
   .admin-content>.admin-panel{margin:12px 0;padding:12px}
 }
+
+.admin-photo-size{font-size:.72rem;color:var(--muted-foreground);white-space:nowrap}
+.r2-meter{height:10px;border-radius:6px;background:var(--secondary);overflow:hidden;margin:6px 0 14px}.r2-meter>span{display:block;height:100%;background:var(--primary)}.r2-meter.warn>span{background:#b8862e}.r2-meter.danger>span{background:var(--destructive)}
+.r2-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:12px 0}.r2-grid div{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px}.r2-grid small{display:block;color:var(--muted-foreground);font-size:.72rem}.r2-grid strong{font-size:1.05rem}
+.r2-op p{margin:4px 0 0}.r2-op small{color:var(--muted-foreground)}

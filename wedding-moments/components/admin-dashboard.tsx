@@ -9,6 +9,7 @@ import { useLibrary } from "@/lib/use-library";
 import type { LibraryAlbum, LibraryPhoto } from "@/lib/library-model";
 import { prepareUpload } from "@/lib/image-upload";
 import { StorageStatus } from "@/components/storage-status";
+import { R2Usage, formatBytes } from "@/components/r2-usage";
 import { uploadDirect } from "@/lib/direct-upload";
 import { isAppleMobile, needsJpegConversion, prepareUploadFile, uploadFilename } from "@/lib/convert-image";
 import { getPhotoThumbnailUrl, isPhotoReady } from "@/lib/photo-urls";
@@ -56,6 +57,7 @@ export function AdminDashboard() {
   const filtered = data.photos.filter(p => isPhotoReady(p) && (!albumFilter || p.album === albumFilter) && (p.filename + p.alt).toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi")));
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 48) - 1));
   const shown = filtered.slice(currentPage * 48, currentPage * 48 + 48);
+  const albumBytes = (slug: string) => data.photos.reduce((sum, p) => p.album === slug && p.status !== "deleted" ? sum + (p.size ?? 0) : sum, 0);
   const currentUploadAlbum = data.albums.some(a => a.slug === uploadAlbum) ? uploadAlbum : data.albums[0]?.slug ?? "";
   useEffect(() => () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); }, []);
   useEffect(() => {
@@ -214,9 +216,10 @@ export function AdminDashboard() {
         {notice && <p className="admin-notice" role="status">{notice}</p>}
         {section === "overview" && <>
           <div className="admin-stats"><article><small>Album</small><strong>{data.albums.length}</strong></article><article><small>Ảnh trong thư viện</small><strong>{data.photos.length}</strong></article><article><small>Ảnh đã tải lên</small><strong>{data.photos.filter(p => !p.demo).length}</strong></article></div>
+          <R2Usage photos={data.photos} />
           <section className="admin-panel"><h2>Thư viện của {data.settings.adminName}</h2><p>Quản lý album, sắp xếp ảnh và tải ảnh gốc ở một nơi.</p><div className="admin-toolbar"><button className="admin-primary" onClick={() => setSection("upload")}>Tải ảnh lên</button><button onClick={() => setSection("albums")}>Quản lý album</button></div></section>
           {data.photos.some(p => p.demo) && <p className="admin-muted">Thư viện hiện có ảnh mẫu lặp lại để minh họa bố cục. Ảnh bạn tải lên sẽ được lưu riêng, giữ nguyên file gốc.</p>}
-          <section className="admin-panel"><h2>Các album</h2>{data.albums.map(a => <button className="admin-album-row" key={a.slug} onClick={() => { setAlbumFilter(a.slug); setPage(0); setSection("photos"); }}><span>{a.name}</span><span>{data.photos.filter(p => p.album === a.slug).length} ảnh</span></button>)}</section>
+          <section className="admin-panel"><h2>Các album</h2>{data.albums.map(a => <button className="admin-album-row" key={a.slug} onClick={() => { setAlbumFilter(a.slug); setPage(0); setSection("photos"); }}><span>{a.name}</span><span>{data.photos.filter(p => p.album === a.slug).length} ảnh · {formatBytes(albumBytes(a.slug))}</span></button>)}</section>
         </>}
         {section === "albums" && <>
           <div className="admin-toolbar"><h2>Album ảnh</h2><button className="admin-primary" disabled={!ready || busy} onClick={() => setEditor({ slug: crypto.randomUUID(), name: "", time: "" })}><Plus size={16} />Tạo album</button></div>
@@ -227,7 +230,7 @@ export function AdminDashboard() {
           </form>}
           <div className="admin-album-grid">{data.albums.map(a => { const pictures = data.photos.filter(p => p.album === a.slug); return <article className="admin-panel" key={a.slug}>
             {pictures.find(isPhotoReady) ? <img src={getPhotoThumbnailUrl(pictures.find(isPhotoReady)!)} alt={a.name} /> : <div className="admin-empty">Chưa có ảnh</div>}
-            <h3>{a.name}</h3><p>{a.time} · {pictures.length} ảnh</p><div className="admin-toolbar">
+            <h3>{a.name}</h3><p>{a.time} · {pictures.length} ảnh · {formatBytes(albumBytes(a.slug))}</p><div className="admin-toolbar">
               <button onClick={() => { setAlbumFilter(a.slug); setSection("photos"); setPage(0); }}>Xem ảnh</button>
               <button disabled={!ready || busy} onClick={() => setEditor({ ...a })}>Sửa</button>
               <button disabled={!ready || busy || pictures.length > 0} title={pictures.length ? "Chuyển hoặc xóa ảnh trước khi xóa album" : "Xóa album trống"} onClick={() => setConfirm({ text: `Xóa album trống “${a.name}”?`, operation: { action: "deleteAlbum", slug: a.slug } })}>Xóa</button>
@@ -242,7 +245,7 @@ export function AdminDashboard() {
           </div>}
           <div className="admin-photo-grid">{shown.map((p, i) => <article key={p.id}>
             <button className="admin-photo-preview" aria-label={`Phóng to ${p.alt}`} onClick={() => setViewer(currentPage * 48 + i)}><img src={getPhotoThumbnailUrl(p)} alt={p.alt} loading="lazy" /></button>
-            <div>{section === "photos" && <input type="checkbox" aria-label={`Chọn ${p.alt}`} checked={selected.includes(p.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, p.id] : ids.filter(id => id !== p.id))} />}<span title={p.filename}>{p.filename}</span><button aria-label={`Tải ${p.filename}`} onClick={() => void download(p)}><Download size={17} /></button></div>
+            <div>{section === "photos" && <input type="checkbox" aria-label={`Chọn ${p.alt}`} checked={selected.includes(p.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, p.id] : ids.filter(id => id !== p.id))} />}<span title={p.filename}>{p.filename}</span>{p.size ? <small className="admin-photo-size">{formatBytes(p.size)}</small> : null}<button aria-label={`Tải ${p.filename}`} onClick={() => void download(p)}><Download size={17} /></button></div>
           </article>)}</div>
           {!filtered.length && <p className="admin-empty">Không có ảnh phù hợp.</p>}
           <div className="admin-toolbar admin-pagination"><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Trang trước</button><span>{currentPage + 1} / {Math.max(1, Math.ceil(filtered.length / 48))}</span><button disabled={(currentPage + 1) * 48 >= filtered.length} onClick={() => setPage(currentPage + 1)}>Trang sau</button></div>

@@ -53,8 +53,9 @@ export function inventoryReport(photos: LibraryPhoto[], objects: StoredObject[],
   const missing = photos.filter(p => p.status === "ready" && p.key && (p.storage ?? "binding") === storage && !stored.has(p.key))
     .map(p => ({ id: p.id, filename: p.filename, album: p.album, key: p.key! }));
   const bytes = (list: StoredObject[]) => list.reduce((sum, o) => sum + o.size, 0);
+  const variants = objects.filter(o => /\.wm-(thumbnail|preview)-v2\.webp$/.test(o.key));
   return {
-    objects: objects.length, truncated: objects.length >= MAX_OBJECTS,
+    objects: objects.length, totalBytes: bytes(objects), variants: { count: variants.length, bytes: bytes(variants) }, truncated: objects.length >= MAX_OBJECTS,
     orphans: { count: orphans.length, bytes: bytes(orphans), items: orphans.slice(0, 500) },
     awaitingCleanup: { count: awaitingCleanup.length, bytes: bytes(awaitingCleanup) },
     missing: { count: missing.length, items: missing.slice(0, 500) },
