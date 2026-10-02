@@ -6,7 +6,10 @@ import type { LibraryPhoto } from "@/lib/library-model";
 // 1M Class A ops (PUT/LIST), 10M Class B ops (GET/HEAD). Egress is free.
 const FREE_BYTES = 10 * 1024 ** 3;
 const FREE_CLASS_A = 1_000_000, FREE_CLASS_B = 10_000_000;
-type Operations = { classA: number; classB: number; free: number; since: string };
+type Operations = { classA: number; classB: number; free: number; since: string; actions: { action: string; requests: number; kind: "A" | "B" | "free" }[] };
+// Vietnamese labels for the R2 actions this app actually triggers.
+const ACTION_LABELS: Record<string, string> = { PutObject: "Tải ảnh lên", ListObjects: "Liệt kê file", CreateMultipartUpload: "Bắt đầu tải nhiều phần", UploadPart: "Tải từng phần",
+  CompleteMultipartUpload: "Hoàn tất tải nhiều phần", CopyObject: "Sao chép file", GetObject: "Xem / tải ảnh", HeadObject: "Kiểm tra file", HeadBucket: "Kiểm tra bucket", DeleteObject: "Xóa file" };
 type Report = { objects: number; totalBytes: number; variants: { count: number; bytes: number }; truncated: boolean;
   orphans: { count: number; bytes: number }; awaitingCleanup: { count: number; bytes: number }; missing: { count: number } };
 
@@ -80,7 +83,11 @@ export function R2Usage({ photos }: { photos: LibraryPhoto[] }) {
     {ops ? <>
       <Meter label="Class A (tải lên, liệt kê)" used={ops.classA} limit={FREE_CLASS_A} format={count} />
       <Meter label="Class B (xem, tải về, HEAD)" used={ops.classB} limit={FREE_CLASS_B} format={count} />
-      {ops.free > 0 && <p className="admin-muted">Thao tác miễn phí (xóa…): {count(ops.free)}. Số liệu Cloudflare có thể trễ vài phút.</p>}
+      {(["A", "B", "free"] as const).map(kind => { const rows = ops.actions.filter(a => a.kind === kind && a.requests > 0); return rows.length ? <div key={kind}>
+        <small className="admin-muted">{kind === "free" ? "Thao tác miễn phí" : `Chi tiết Class ${kind}`}</small>
+        <div className="r2-grid">{rows.map(a => <div key={a.action}><small>{ACTION_LABELS[a.action] ?? a.action} ({a.action})</small><strong>{count(a.requests)}</strong></div>)}</div>
+      </div> : null; })}
+      <p className="admin-muted">Số liệu Cloudflare có thể trễ vài phút.</p>
     </> : <p className="admin-muted">{opsError ? `Không đọc được số thao tác: ${opsError}` : "Đang tải số thao tác…"}</p>}
     <p className="admin-muted">Gói miễn phí R2 mỗi tháng: 10 GB lưu trữ, 1 triệu thao tác Class A, 10 triệu thao tác Class B; băng thông ra miễn phí.</p>
   </section>;

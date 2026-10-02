@@ -5,13 +5,13 @@ const CLASS_A = new Set(["ListBuckets", "PutBucket", "ListObjects", "PutObject",
   "LifecycleStorageTierTransition", "ListMultipartUploads", "UploadPart", "UploadPartCopy", "ListParts", "PutBucketEncryption", "PutBucketCors", "PutBucketLifecycleConfiguration"]);
 const CLASS_B = new Set(["HeadBucket", "HeadObject", "GetObject", "UsageSummary", "GetBucketEncryption", "GetBucketLocation", "GetBucketCors", "GetBucketLifecycleConfiguration"]);
 
-export type R2Operations = { classA: number; classB: number; free: number; since: string; actions: { action: string; requests: number }[] };
+export type R2Operations = { classA: number; classB: number; free: number; since: string; actions: { action: string; requests: number; kind: "A" | "B" | "free" }[] };
 
 export function classifyOperations(groups: { action: string; requests: number }[], since: string): R2Operations {
   const total = (set: Set<string>) => groups.reduce((sum, g) => set.has(g.action) ? sum + g.requests : sum, 0);
   const classA = total(CLASS_A), classB = total(CLASS_B);
   const all = groups.reduce((sum, g) => sum + g.requests, 0);
-  return { classA, classB, free: all - classA - classB, since, actions: [...groups].sort((a, b) => b.requests - a.requests) };
+  return { classA, classB, free: all - classA - classB, since, actions: groups.map(g => ({ ...g, kind: CLASS_A.has(g.action) ? "A" as const : CLASS_B.has(g.action) ? "B" as const : "free" as const })).sort((a, b) => b.requests - a.requests) };
 }
 
 // Current calendar month (UTC) — the R2 free tier resets monthly.
